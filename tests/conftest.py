@@ -4,6 +4,7 @@ The `minimal_spec` fixture is a placeholder — it returns nothing until
 `loader.py` has a real implementation. Tests that need it should skip
 for now.
 """
+
 from __future__ import annotations
 
 import pytest

@@ -5,6 +5,7 @@ accidental syntax errors and missing-symbol bugs in the scaffold during
 CI. Does NOT exercise behaviour — bodies are stubs that raise
 NotImplementedError when invoked.
 """
+
 from __future__ import annotations
 
 import importlib
