@@ -28,8 +28,12 @@ The reference repo at `/Users/thomas/python/catalyst-sdwan-super-mcp/` is read-o
 | `.env.example` creds | Blank placeholders, comment pointing to DevNet sandbox page |
 | Env var prefix | `CATALYST_CENTER_*` (no `CC_` shorthand) |
 | GitHub home | `github.com/thomaschristory/catalyst-center-super-mcp` (repo not created in this session) |
-| License | MIT |
+| License | Apache-2.0 (matches sdwan; bootstrap doc was wrong about sdwan being MIT) |
 | Git remote / push | None this session; local `git init` only |
+| Module layout | Full sdwan layout: `auth.py`, `config.py`, `loader.py`, `dispatcher.py`, `pagination.py`, `transport_auth.py`, `tools.py`, `diff.py`, `server.py`, `fetcher/` subpackage. No `cli.py` — entry point is `server:main`. |
+| `config.yaml` shape | Full sdwan schema adapted: `catalyst_center{retries, pagination, timeout}`, `server{auto_fetch, max_actions_per_tool, read_write}`, `transport{mode, host, port, auth{type, token}}`. Drop `use_jwt` (no dual-mode in Catalyst Center). |
+| CI workflow | Written from scratch — sdwan has no `ci.yml`, only `release.yml` and `docs.yml`. New `ci.yml` runs ruff + pytest + uv build on push/PR. |
+| `fetcher/` for v0.1.0 | Subpackage stub only this session. Real DevNet auto-fetch deferred to a follow-up session pending URL discovery. |
 
 ## 3. Session deliverables
 
@@ -48,43 +52,69 @@ The reference repo at `/Users/thomas/python/catalyst-sdwan-super-mcp/` is read-o
 |---|---|---|
 | `pyproject.toml` | Adapt from sdwan | Swap name, script entry point, URLs. Same deps. |
 | `catalyst_center_mcp/__init__.py` | New, trivial | Version constant. |
-| `catalyst_center_mcp/cli.py` | Adapt (stub body) | CLI name swap; argparse flags identical. |
-| `catalyst_center_mcp/config.py` | Adapt (stub body) | Drop vManage-specific keys. |
+| `catalyst_center_mcp/config.py` | Adapt (stub body) | Drop vManage-specific keys (`use_jwt`). Rename `VManageConfig` → `CatalystCenterConfig`. |
 | `catalyst_center_mcp/auth.py` | Rewrite from scratch (stub body) | Single flow: Basic → token → `X-Auth-Token`. No JWT/session dual mode. |
 | `catalyst_center_mcp/loader.py` | Verbatim port (stub body) | Splitter + action-name derivation unchanged. |
 | `catalyst_center_mcp/dispatcher.py` | Port + tweak (stub body) | Add `offset`/`limit` to pagination param-name list. `_await_task` seam documented. |
+| `catalyst_center_mcp/pagination.py` | Verbatim port (stub body) | Pagination strategies; offset/limit becomes the primary detector. |
 | `catalyst_center_mcp/tools.py` | Verbatim port (stub body) | MCP tool registration is product-agnostic. |
 | `catalyst_center_mcp/diff.py` | Verbatim port (stub body) | Bundled-spec-version comparator. |
-| `catalyst_center_mcp/server.py` | Adapt (stub body) | fastmcp transport wiring. |
+| `catalyst_center_mcp/transport_auth.py` | Verbatim port (stub body) | Bearer-token auth for SSE/HTTP MCP transports (not upstream Catalyst Center auth). |
+| `catalyst_center_mcp/server.py` | Adapt (stub body) | fastmcp transport wiring + `main()` entry point (script target). |
+| `catalyst_center_mcp/fetcher/__init__.py` | Stub | Subpackage placeholder. Real DevNet auto-fetch is a follow-up session. |
 | `config.yaml` | New | See §5. |
 | `.env.example` | New | See §6. |
 | `Dockerfile`, `docker-compose.yml` | Adapt | Rename volume mount path. |
 | `mkdocs.yml`, `docs/**` | Adapt | Skeleton only this session. |
-| `.github/workflows/*` | Verbatim | Lint/test/build/publish. |
+| `.github/workflows/release.yml` | Verbatim port (adapt names/URLs) | Tag-driven build + PyPI publish + GitHub release. |
+| `.github/workflows/docs.yml` | Verbatim port (adapt names/URLs) | mkdocs build + gh-pages publish. |
+| `.github/workflows/ci.yml` | **New** (sdwan lacks one) | Runs ruff + pytest + uv build on push/PR. |
 | `tests/conftest.py` | Stub | `minimal_spec` fixture raises `pytest.skip` until loader exists. |
 | `tests/test_smoke.py` | New | Asserts every module imports. |
-| `LICENSE`, `CHANGELOG.md`, `README.md`, `CLAUDE.md`, `AGENTS.md` | New / adapt | MIT, empty changelog, v0.1.0-stub README, CLAUDE.md carries architecture + gates sections (no qorexdevs, no issue history). |
+| `LICENSE`, `CHANGELOG.md`, `README.md`, `CLAUDE.md`, `AGENTS.md` | New / adapt | Apache-2.0, empty changelog, v0.1.0-stub README, CLAUDE.md carries architecture + gates sections (no qorexdevs, no issue history). |
 
 ## 5. `config.yaml` initial contents
 
+Adapted from `catalyst-sdwan-super-mcp/config.yaml`. Drops `use_jwt` (no dual-mode auth in Catalyst Center). `port: 443` kept explicit since Catalyst Center is always HTTPS. `api_version` field name matches sdwan's `active_version`.
+
 ```yaml
 catalyst_center:
-  base_url: https://sandboxdnac.cisco.com
+  # Cisco Catalyst Center Sandbox defaults — replace with your own deployment.
+  # https://devnetsandbox.cisco.com/ (always-on, no reservation required)
+  host: sandboxdnac.cisco.com
+  port: 443
   verify_ssl: true
-  api_version: TBD-after-spec-diff   # pin to whatever sandboxdnac runs
-  spec_dir: specs
+  username: "${CATALYST_CENTER_USERNAME}"
+  password: "${CATALYST_CENTER_PASSWORD}"
+  timeout: 30.0            # per-request httpx timeout (seconds)
+  retries:
+    max_attempts: 3        # total attempts incl. first try; 1 disables retries
+    statuses: [502, 503, 504]
+    backoff_base: 0.5      # seconds; first backoff is base * 2**0 with jitter
+    backoff_cap: 8.0       # upper bound on a single backoff
+    retry_mutating: false  # default: only GET is retried
 
-server:
-  read_write: false
-  max_actions_per_tool: 80
-  transport: stdio
+catalyst_center_mcp:
+  specs_dir: ./specs
+  active_version: "TBD-after-spec-diff"  # pin to whatever sandboxdnac runs
+  max_actions_per_tool: 80               # adaptive splitter cap; 0 disables splitting
+  auto_fetch: false                      # v0.1.0 ships without fetcher; set true once implemented
+  pagination:
+    enabled: true
+    max_pages: 5
+    page_size: null
+
+transport:
+  mode: stdio                       # stdio | sse | streamable-http
   host: 127.0.0.1
-  port: 8765
-
-pagination:
-  auto_follow: true
-  max_pages: 20
-  default_limit: 100
+  port: 8000
+  # HTTP transports (sse, streamable-http) only:
+  #   type: none    → no auth. Auto-demoted to 127.0.0.1 if host is non-loopback,
+  #                   unless you also pass --insecure-allow-public.
+  #   type: bearer  → require `Authorization: Bearer <token>` on every request.
+  auth:
+    type: none
+    # token: "${CATALYST_CENTER_MCP_TOKEN}"
 ```
 
 ## 6. `.env.example` initial contents
@@ -124,13 +154,16 @@ catalyst-center-super-mcp/
 ├── catalyst_center_mcp/
 │   ├── __init__.py
 │   ├── auth.py
-│   ├── cli.py
 │   ├── config.py
 │   ├── diff.py
 │   ├── dispatcher.py
+│   ├── fetcher/
+│   │   └── __init__.py
 │   ├── loader.py
+│   ├── pagination.py
 │   ├── server.py
-│   └── tools.py
+│   ├── tools.py
+│   └── transport_auth.py
 ├── config.yaml
 ├── docker-compose.yml
 ├── docs/
@@ -173,7 +206,18 @@ def <expected_entry_point>(*args, **kwargs):
     raise NotImplementedError("scaffold only — implement per design doc")
 ```
 
-Each stub exports the symbols downstream modules will import (e.g. `auth.py` exports `CatalystCenterAuth`; `loader.py` exports `load_spec`, `Loader`). Signatures are read off the sdwan analogue — no invented APIs.
+Each stub exports the symbols downstream modules will import. Symbol names are read off the sdwan analogue and adapted — no invented APIs:
+
+- `auth.py` → `CatalystCenterAuth` class with `async def fetch_token()`, `def header()`.
+- `config.py` → `CatalystCenterConfig`, `RetryConfig`, `PaginationConfig`, `CatalystCenterMcpConfig`, `TransportAuthConfig`, `TransportConfig`, `AppConfig` dataclasses; `load_config(path: str = "config.yaml") -> AppConfig`.
+- `loader.py` → `ParameterSpec`, `OperationSpec`, `ToolGroup`, `SpecIndex` dataclasses; `SpecLoader` class with `def load() -> SpecIndex`.
+- `dispatcher.py` → `Dispatcher` class with `async def dispatch(action_name: str, params: dict) -> Any`.
+- `pagination.py` → `paginate(...)` helper, pagination-style detector.
+- `tools.py` → `register_tools(mcp, index, dispatcher, read_write: bool) -> None`.
+- `diff.py` → `diff_versions(a: SpecIndex, b: SpecIndex)`, `print_diff(...)`.
+- `transport_auth.py` → middleware factory for bearer auth on SSE/HTTP transports.
+- `server.py` → `def main() -> None` (the `[project.scripts]` entry point) and any transport-setup helpers.
+- `fetcher/__init__.py` → `def fetch_spec(version: str, dest: Path) -> None` placeholder.
 
 ## 9. Sandbox auth findings doc shape
 
