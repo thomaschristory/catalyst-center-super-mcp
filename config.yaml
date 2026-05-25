@@ -1,0 +1,40 @@
+catalyst_center:
+  # Cisco Catalyst Center Sandbox defaults — replace with your own deployment.
+  # https://devnetsandbox.cisco.com/  (always-on, no reservation required)
+  host: sandboxdnac.cisco.com
+  port: 443
+  verify_ssl: true
+  username: "${CATALYST_CENTER_USERNAME}"
+  password: "${CATALYST_CENTER_PASSWORD}"
+  timeout: 30.0            # per-request httpx timeout (seconds)
+  retries:
+    max_attempts: 3        # total attempts incl. first try; 1 disables retries
+    statuses: [502, 503, 504]
+    backoff_base: 0.5      # seconds; first backoff is base * 2**0 with jitter
+    backoff_cap: 8.0       # upper bound on a single backoff
+    retry_mutating: false  # default: only GET is retried
+
+catalyst_center_mcp:
+  specs_dir: ./specs
+  # Sandbox runs Catalyst Center 2.3.7.10; closest bundled spec is 2.3.7.9.
+  # Small drift is expected on a handful of endpoints — see
+  # docs/superpowers/findings/2026-05-25-spec-diff.md once Task 4 runs.
+  active_version: "2.3.7.9"
+  max_actions_per_tool: 80               # adaptive splitter cap; 0 disables splitting
+  auto_fetch: false                      # v0.1.0 ships without fetcher; flip when fetcher/ is real
+  pagination:
+    enabled: true
+    max_pages: 5
+    page_size: null
+
+transport:
+  mode: stdio                       # stdio | sse | streamable-http
+  host: 127.0.0.1
+  port: 8000
+  # HTTP transports (sse, streamable-http) only:
+  #   type: none    → no auth. Auto-demoted to 127.0.0.1 if host is non-loopback,
+  #                   unless you also pass --insecure-allow-public.
+  #   type: bearer  → require `Authorization: Bearer <token>` on every request.
+  auth:
+    type: none
+    # token: "${CATALYST_CENTER_MCP_TOKEN}"
