@@ -233,3 +233,67 @@ async def test_retry_exhaustion_returns_error_envelope(
     assert result.get("error") is True
     assert result.get("status_code") == 503
     assert route.call_count == 3  # max_attempts honoured
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_non_retryable_status_not_retried(
+    minimal_specs_dir: Path, _instant_sleep: None
+) -> None:
+    """A 404 must not be retried even when retry is configured for 503."""
+    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+        return_value=httpx.Response(404, json={"error": "not found"}),
+    )
+    d = _make_dispatcher(
+        minimal_specs_dir,
+        retry=RetryConfig(max_attempts=3, statuses=(503,), backoff_base=0.0),
+    )
+    result = await d.call("get_devices_count__network_device", {})
+    await d.close()
+    assert isinstance(result, dict)
+    assert result.get("error") is True
+    assert result.get("status_code") == 404
+    assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_max_attempts_one_disables_retry(
+    minimal_specs_dir: Path, _recorded_sleeps: list[float]
+) -> None:
+    """max_attempts=1 means a single try; no sleeps scheduled."""
+    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+        return_value=httpx.Response(503, text="busy"),
+    )
+    d = _make_dispatcher(
+        minimal_specs_dir,
+        retry=RetryConfig(max_attempts=1, statuses=(503,), backoff_base=1.0),
+    )
+    result = await d.call("get_devices_count__network_device", {})
+    await d.close()
+    assert isinstance(result, dict) and result.get("error") is True
+    assert route.call_count == 1
+    assert _recorded_sleeps == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_backoff_base_zero_skips_sleep(
+    minimal_specs_dir: Path, _recorded_sleeps: list[float]
+) -> None:
+    """backoff_base <= 0 short-circuits without scheduling asyncio.sleep."""
+    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+        side_effect=[
+            httpx.Response(503, text="busy"),
+            httpx.Response(503, text="busy"),
+            httpx.Response(200, json={"response": 1, "version": "1.0"}),
+        ]
+    )
+    d = _make_dispatcher(
+        minimal_specs_dir,
+        retry=RetryConfig(max_attempts=3, statuses=(503,), backoff_base=0.0),
+    )
+    result = await d.call("get_devices_count__network_device", {})
+    await d.close()
+    assert result == {"response": 1, "version": "1.0"}
+    assert _recorded_sleeps == []
