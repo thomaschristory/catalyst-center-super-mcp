@@ -73,3 +73,16 @@ def test_main_propagates_subcommand_return_code(monkeypatch: pytest.MonkeyPatch)
         lambda _argv: 7,
     )
     assert server.main(["fetch", "x"]) == 7
+
+
+def test_main_dispatches_discover_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    called: dict[str, list[str]] = {}
+
+    def _fake(argv: list[str]) -> int:
+        called["argv"] = argv
+        return 0
+
+    monkeypatch.setattr("catalyst_center_mcp.cli.discover.run_discover_versions", _fake)
+    rc = server.main(["discover-versions"])
+    assert rc == 0
+    assert called["argv"] == []
