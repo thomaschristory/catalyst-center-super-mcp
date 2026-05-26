@@ -22,11 +22,15 @@ Splitting algorithm (see issue #13 in the sdwan repo for the worked example):
 Action names are derived from (verb, tag-component, last-non-templated
 path segment) and deduplicated within a tool. They are stable across
 Cisco's operationId churn between releases.
+
+All log lines route to stderr — stdout is reserved for the MCP JSON-RPC
+stream on stdio transport.
 """
 
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -401,7 +405,8 @@ def _split_by_path(
                 f"[loader] WARNING: tool '{parent_slug}' has {len(only_ops)} actions "
                 f"(threshold={threshold}) — path splitting tried depths "
                 f"{PATH_SPLIT_START_DEPTH}-{last_tried_depth} (max {PATH_SPLIT_MAX_DEPTH}) "
-                f"and could not subdivide further."
+                f"and could not subdivide further.",
+                file=sys.stderr,
             )
         return [ToolGroup(name=parent_slug, display_tag=parent_display, operations=only_ops)]
 
@@ -427,7 +432,8 @@ def _split_by_path(
             print(
                 f"[loader] WARNING: tool '{name}' has {len(bucket_ops)} actions "
                 f"(threshold={threshold}) — hit PATH_SPLIT_MAX_DEPTH={PATH_SPLIT_MAX_DEPTH} "
-                f"at depth {chosen_depth} without further splitting."
+                f"at depth {chosen_depth} without further splitting.",
+                file=sys.stderr,
             )
 
     if misc_ops:
@@ -532,7 +538,7 @@ class SpecLoader:
         loader_cls: type[yaml.SafeLoader] = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
         for spec_file in spec_files:
-            print(f"[loader] Loading {spec_file.name}")
+            print(f"[loader] Loading {spec_file.name}", file=sys.stderr)
             try:
                 if spec_file.suffix == ".json":
                     import json
@@ -541,13 +547,16 @@ class SpecLoader:
                 else:
                     spec = yaml.load(spec_file.read_text(), Loader=loader_cls)
             except (yaml.YAMLError, ValueError) as e:
-                print(f"[loader] WARNING: Failed to parse {spec_file.name}: {e}")
+                print(f"[loader] WARNING: Failed to parse {spec_file.name}: {e}", file=sys.stderr)
                 continue
 
             merged["paths"].update(spec.get("paths", {}))
             merged["components"]["schemas"].update(spec.get("components", {}).get("schemas", {}))
 
-        print(f"[loader] Loaded {len(spec_files)} spec file(s), {len(merged['paths'])} total paths")
+        print(
+            f"[loader] Loaded {len(spec_files)} spec file(s), {len(merged['paths'])} total paths",
+            file=sys.stderr,
+        )
         return merged
 
     # ------------------------------------------------------------------
@@ -591,13 +600,15 @@ class SpecLoader:
                     print(
                         f"[loader] WARNING: misc tool '{group.name}' has "
                         f"{len(group.operations)} actions (threshold={threshold}) — "
-                        f"many small sibling sub-tags collapsed past the cap."
+                        f"many small sibling sub-tags collapsed past the cap.",
+                        file=sys.stderr,
                     )
 
         mode = "RW" if self.allowed_methods == RW_METHODS else "RO"
         print(
             f"[loader] Mode={mode}, max_actions_per_tool={threshold} -> "
-            f"{len(groups)} tool(s), {sum(len(g.operations) for g in groups)} operations"
+            f"{len(groups)} tool(s), {sum(len(g.operations) for g in groups)} operations",
+            file=sys.stderr,
         )
         return groups
 
@@ -613,7 +624,8 @@ class SpecLoader:
                 if op.action_name in index.by_action_name:
                     print(
                         f"[loader] WARNING: duplicate action_name '{op.action_name}' "
-                        f"after dedup — keeping first occurrence"
+                        f"after dedup — keeping first occurrence",
+                        file=sys.stderr,
                     )
                 else:
                     index.by_action_name[op.action_name] = op
@@ -621,7 +633,8 @@ class SpecLoader:
                 index.by_operation_id.setdefault(op.operation_id, op)
 
         print(
-            f"[loader] Index built: {len(index.by_action_name)} actions across {len(groups)} tools"
+            f"[loader] Index built: {len(index.by_action_name)} actions across {len(groups)} tools",
+            file=sys.stderr,
         )
         return index
 
