@@ -5,6 +5,65 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-05-26
+
+Hardening release. Resolves the v0.1.0 deferred items that materially affect
+day-to-day usage, and locks down the CI supply chain.
+
+### Added
+- **Cross-tool action-name disambiguation.** Within a tool, action names that
+  collide are now deduped by appending the operation's parent path segment
+  (e.g. `get_devices_count__network_device`) instead of the previous
+  numeric `_2`, `_3`, … suffix. Names are now stable across spec releases as
+  long as the path is stable. **Breaking-ish:** if you scripted against the
+  previous numeric form, `get_devices_count` is gone — the canonical name is
+  `get_devices_count__network_device`. The tool description still lists every
+  action with `(METHOD path)` so you can find the new name. (PR #9)
+- **Proactive JWT-based token refresh.** `CatalystCenterAuth` now parses the
+  JWT's `exp` claim on login, exposes `expires_in` and `needs_refresh()`, and
+  the dispatcher refreshes 60s before expiry under an `asyncio.Lock`
+  (single-flight). Reactive 401 re-auth is kept as a fallback. (PR #8)
+- **Real DevNet spec auto-fetcher.** The `fetcher/` module now has a working
+  implementation backed by a hardcoded `KNOWN_SPEC_URLS` table. New
+  exceptions: `SpecVersionUnknownError`, `SpecContentInvalidError`. (PR #7)
+- **`auto_fetch: true` by default.** `config.yaml` ships with auto-fetch
+  enabled; bundled specs are still preferred when present, so this is a
+  no-op for users with the repo's `specs/` tree mounted.
+- **CI supply-chain hardening.** Every third-party GitHub Action used by this
+  repo is now pinned to a full 40-char commit SHA with a trailing
+  `# <tag>` comment, per CLAUDE.md's security posture. This applies to
+  `actions/checkout`, `astral-sh/setup-uv`, `actions/upload-pages-artifact`,
+  `actions/deploy-pages`, `actions/upload-artifact`, `actions/download-artifact`,
+  `pypa/gh-action-pypi-publish`, `docker/setup-buildx-action`,
+  `docker/build-push-action`, and `dependabot/fetch-metadata`. Going forward,
+  Dependabot's `github-actions` ecosystem bumps will show as SHA→SHA diffs
+  (intentional, not a regression).
+
+### Changed
+- `astral-sh/setup-uv` v7.5.0 → **v8.1.0** (Dependabot #3, accepted).
+- `docker/setup-buildx-action` v3 → **v4** (Dependabot #6, accepted).
+- `dependabot/fetch-metadata` v2 → **v3** (Dependabot #4, accepted; the v3
+  release's only breaking change is the Node 24 runtime requirement, which
+  GitHub-hosted runners already satisfy).
+- `actions/checkout` in `release.yml:50` brought in line with the rest of the
+  repo at v6 (was v4, leftover from the bootstrap).
+
+### Held / deferred
+- `actions/download-artifact` v4 → v8 (Dependabot #2) **held**. v8 introduces
+  breaking changes (ESM, default-error on digest mismatch) and the paired
+  `actions/upload-artifact` has no v8 yet — latest is v7.0.1. Moving them
+  together is the safe path; reopen in v0.3.0.
+
+### Deferred to v0.3.0+
+- Task-poll helper (`_await_task` reserved-param seam).
+- JWT signature verification (today we trust the `exp` claim from the token
+  we just received over TLS, which is sufficient for a TTL hint).
+- Sandbox-integration CI job (today's CI covers unit/mock paths only).
+- Schema-aware parameter validation in the dispatcher.
+- fastmcp 4.x migration.
+
+[0.2.0]: https://github.com/thomaschristory/catalyst-center-super-mcp/releases/tag/v0.2.0
+
 ## [0.1.0] — 2026-05-26
 
 First working release. The `catalyst-center-mcp` CLI runs against the always-on
