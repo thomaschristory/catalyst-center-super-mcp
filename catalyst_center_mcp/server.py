@@ -46,6 +46,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description=(
             "FastMCP server for Cisco Catalyst Center, dynamically generated from the OpenAPI spec."
         ),
+        epilog=(
+            "Subcommands (run with --help for details):\n"
+            "  fetch              Download an OpenAPI spec for one or all known versions.\n"
+            "  list-versions      List known + on-disk versions (offline).\n"
+            "  discover-versions  [experimental] Diff DevNet vs KNOWN_SPEC_URLS.\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--config",
