@@ -2,6 +2,9 @@
 
 ## Overview
 
+!!! note
+    The `milestone-rollover.yml` workflow referenced below was introduced in **v0.3.0** (see PR #15). If you're reading this doc on `main` before v0.3.0 merges, that workflow may not yet exist.
+
 Tagging `v<X>.<Y>.<Z>` on `main` triggers `.github/workflows/release.yml`, which:
 
 1. Builds the sdist + wheel with `uv build`.
@@ -37,7 +40,7 @@ If you later rename the workflow file or the `environment:` block in `release.ym
 1. Land all PRs against the `v<X>.<Y>.<Z>` milestone.
 2. Update `CHANGELOG.md` with a dated `[<X>.<Y>.<Z>]` section.
 3. Bump `__version__` in `catalyst_center_mcp/__init__.py` and `version` in `pyproject.toml`.
-4. `uv lock` to refresh `uv.lock`.
+4. `uv lock && uv sync` to refresh `uv.lock` and the local environment.
 5. Commit, push, merge.
 6. `git tag v<X>.<Y>.<Z>` on `main` and `git push origin v<X>.<Y>.<Z>`.
 
