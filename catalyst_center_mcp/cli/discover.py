@@ -22,7 +22,11 @@ import sys
 import httpx
 
 from catalyst_center_mcp.fetcher import KNOWN_SPEC_URLS
-from catalyst_center_mcp.fetcher.discover import DiscoveryError, discover_versions
+from catalyst_center_mcp.fetcher.discover import (
+    DEVNET_INDEX_URL,
+    DiscoveryError,
+    discover_versions,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -45,12 +49,19 @@ def run_discover_versions(argv: list[str]) -> int:
         print(f"[discover] {exc}", file=sys.stderr)
         return 2
     except httpx.HTTPError as exc:
-        print(f"[discover] DevNet unreachable: {exc}", file=sys.stderr)
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        print(
+            f"[discover] DevNet unreachable at {DEVNET_INDEX_URL} "
+            f"({type(exc).__name__}, status={status}): {exc}",
+            file=sys.stderr,
+        )
         return 2
 
     all_versions = sorted(set(discovered) | set(KNOWN_SPEC_URLS))
     stale = False
-    print(f"Diff vs KNOWN_SPEC_URLS ({len(KNOWN_SPEC_URLS)} entries):")
+    print(
+        f"Diff vs KNOWN_SPEC_URLS ({len(KNOWN_SPEC_URLS)} hardcoded, {len(discovered)} discovered):"
+    )
     for v in all_versions:
         in_disco = v in discovered
         in_known = v in KNOWN_SPEC_URLS
