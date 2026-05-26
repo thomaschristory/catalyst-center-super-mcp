@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 from typing import Literal, cast
 
 from dotenv import load_dotenv
@@ -24,6 +25,7 @@ from .auth import CatalystCenterAuth
 from .config import AppConfig, load_config
 from .diff import diff_versions, print_diff
 from .dispatcher import Dispatcher
+from .fetcher import fetch_spec
 from .loader import SpecLoader
 from .tools import register_tools
 from .transport_auth import BearerAuthMiddleware, decide_bind
@@ -99,6 +101,30 @@ def run_diff(specs_dir: str, old_version: str, new_version: str) -> int:
     return 0
 
 
+async def _maybe_auto_fetch(
+    *,
+    auto_fetch: bool,
+    specs_dir: Path,
+    version: str,
+    verify_ssl: bool,
+) -> None:
+    """Download the spec for `version` into `specs_dir/<version>/` if needed.
+
+    Skips when `auto_fetch` is false or when the version directory already
+    contains at least one `*.json` file.
+    """
+    if not auto_fetch:
+        return
+    version_dir = specs_dir / version
+    if version_dir.exists() and any(version_dir.glob("*.json")):
+        return
+    print(
+        f"[server] auto_fetch enabled — downloading spec for {version}",
+        file=sys.stderr,
+    )
+    await fetch_spec(version, version_dir, verify_ssl=verify_ssl)
+
+
 async def _connect_and_register(
     args: argparse.Namespace,
 ) -> tuple[FastMCP, Dispatcher, TransportMode, str, int, list[Middleware]]:
@@ -140,6 +166,13 @@ async def _connect_and_register(
         f"[server] Catalyst Center Super MCP v{__version__} — "
         f"version={version}, RO={'no' if read_write else 'yes'}, transport={transport_mode}",
         file=sys.stderr,
+    )
+
+    await _maybe_auto_fetch(
+        auto_fetch=config.catalyst_center_mcp.auto_fetch,
+        specs_dir=Path(config.catalyst_center_mcp.specs_dir),
+        version=version,
+        verify_ssl=config.catalyst_center.verify_ssl,
     )
 
     index = SpecLoader(
