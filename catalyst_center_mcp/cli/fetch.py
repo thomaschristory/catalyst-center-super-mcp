@@ -9,8 +9,13 @@ from pathlib import Path
 
 import httpx
 
-from ..config import DEFAULT_CONFIG_PATH, AppConfig, load_config, resolve_config_path
-from ..fetcher import (
+from catalyst_center_mcp.config import (
+    DEFAULT_CONFIG_PATH,
+    AppConfig,
+    load_config,
+    resolve_config_path,
+)
+from catalyst_center_mcp.fetcher import (
     KNOWN_SPEC_URLS,
     SpecContentInvalidError,
     SpecVersionUnknownError,
@@ -50,9 +55,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _load_config_or_default(config_arg: str | None) -> AppConfig:
     explicit = config_arg is not None
-    resolved, _ = resolve_config_path(
-        config_arg or DEFAULT_CONFIG_PATH, explicit=explicit
-    )
+    resolved, _ = resolve_config_path(config_arg or DEFAULT_CONFIG_PATH, explicit=explicit)
     try:
         return load_config(resolved)
     except FileNotFoundError:
@@ -66,9 +69,7 @@ def run_fetch(argv: list[str]) -> int:
     config = _load_config_or_default(args.config)
     specs_dir = Path(args.specs_dir or config.catalyst_center_mcp.specs_dir)
 
-    versions: list[str] = (
-        list(KNOWN_SPEC_URLS) if args.all_known else [args.version]
-    )
+    versions: list[str] = list(KNOWN_SPEC_URLS) if args.all_known else [args.version]
 
     async def _runner() -> int:
         rc = 0

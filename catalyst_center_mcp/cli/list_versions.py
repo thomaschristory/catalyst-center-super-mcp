@@ -5,8 +5,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ..config import DEFAULT_CONFIG_PATH, AppConfig, load_config, resolve_config_path
-from ..fetcher import KNOWN_SPEC_URLS, list_known_versions
+from catalyst_center_mcp.config import (
+    DEFAULT_CONFIG_PATH,
+    AppConfig,
+    load_config,
+    resolve_config_path,
+)
+from catalyst_center_mcp.fetcher import KNOWN_SPEC_URLS, list_known_versions
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -29,9 +34,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _load_config_or_default(config_arg: str | None) -> AppConfig:
     explicit = config_arg is not None
-    resolved, _ = resolve_config_path(
-        config_arg or DEFAULT_CONFIG_PATH, explicit=explicit
-    )
+    resolved, _ = resolve_config_path(config_arg or DEFAULT_CONFIG_PATH, explicit=explicit)
     try:
         return load_config(resolved)
     except FileNotFoundError:
