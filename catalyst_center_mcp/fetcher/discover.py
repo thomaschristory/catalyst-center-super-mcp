@@ -29,6 +29,7 @@ Network usage:
 from __future__ import annotations
 
 import re
+import sys
 from typing import Final
 
 import httpx
@@ -50,6 +51,9 @@ _SPEC_URL_RE: Final[re.Pattern[str]] = re.compile(
     r"/intent_api_[0-9a-zA-Z_]+\.json"
 )
 
+# Valid slugs look like 2-3-7-9 or 3-1-3: 2..4 dot-separated numeric segments.
+_VERSION_SLUG_RE: Final[re.Pattern[str]] = re.compile(r"^\d+(-\d+){1,3}$")
+
 
 def _slug_to_version(slug: str) -> str:
     """``2-3-7-9`` -> ``2.3.7.9``."""
@@ -64,15 +68,29 @@ def parse_discovery_html(html: str) -> dict[str, str]:
     """
     out: dict[str, str] = {}
     for match in _SPEC_URL_RE.finditer(html):
-        version = _slug_to_version(match.group("slug"))
-        # Keep the first occurrence per version (the page may repeat links).
-        out.setdefault(version, match.group(0))
+        slug = match.group("slug")
+        if not _VERSION_SLUG_RE.fullmatch(slug):
+            print(
+                f"[discover] WARNING: skipping non-version slug {slug!r}",
+                file=sys.stderr,
+            )
+            continue
+        version = _slug_to_version(slug)
+        existing = out.get(version)
+        if existing is None:
+            out[version] = match.group(0)
+        elif existing != match.group(0):
+            print(
+                f"[discover] WARNING: duplicate URLs for version {version!r} "
+                f"(keeping first: {existing}, ignoring: {match.group(0)})",
+                file=sys.stderr,
+            )
     if not out:
         raise DiscoveryError(
             f"Found no spec links matching the pubhub URL pattern on the DevNet page. "
-            f"The page's HTML shape may have changed, or DevNet is now a pure JS SPA "
-            f"with no static spec links. Inspect {DEVNET_INDEX_URL} manually and "
-            f"update KNOWN_SPEC_URLS in catalyst_center_mcp/fetcher/__init__.py."
+            f"The page's HTML shape may have changed. Inspect "
+            f"{DEVNET_INDEX_URL} manually and update the regex in "
+            f"catalyst_center_mcp/fetcher/discover.py."
         )
     return out
 
