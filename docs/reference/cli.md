@@ -30,9 +30,9 @@ catalyst-center-mcp [--config PATH] [--transport stdio|sse|streamable-http]
 ## Subcommands
 
 The first positional token is matched against the subcommand set
-(`fetch`, `list-versions`) **before** the main argparse parser runs. When a
-subcommand matches, the server is not started. All non-data output routes to
-stderr so stdio-mode JSON-RPC is never polluted.
+(`fetch`, `list-versions`, `discover-versions`) **before** the main argparse
+parser runs. When a subcommand matches, the server is not started. All
+non-data output routes to stderr so stdio-mode JSON-RPC is never polluted.
 
 ### `fetch`
 
@@ -81,3 +81,33 @@ Versions on disk under ./specs/:
   2.3.7.9  (cached)
   3.1.3    (cached)
 ```
+
+### `discover-versions` *(experimental)*
+
+Scrape Cisco DevNet's docs landing page
+(`https://developer.cisco.com/docs/dna-center/`) for Catalyst Center spec
+versions and print a diff vs the hardcoded `KNOWN_SPEC_URLS` table. Helper
+only — it never mutates the hardcoded table; the maintainer copies new
+entries in by hand after reviewing.
+
+```bash
+catalyst-center-mcp discover-versions
+```
+
+No flags beyond `--help`. Always TLS-verified — DevNet is a public CDN.
+
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| `0` | Every hardcoded entry was also discovered on DevNet. `+ <version>` lines may appear for new entries DevNet exposes that aren't yet in `KNOWN_SPEC_URLS` — these do not change the exit code. |
+| `1` | One or more hardcoded entries are no longer visible on DevNet (`- <version>` lines). The hardcoded table may be stale. |
+| `2` | `DiscoveryError` (regex matched zero URLs on the page — DevNet's HTML shape may have changed) or `httpx.HTTPError` (network down, non-2xx). |
+
+**Why `[experimental]`:** DevNet's docs page is largely a JavaScript SPA;
+its static HTML may not contain the full pubhub spec URLs the regex
+expects. When that happens this command exits 2 with a clear message
+pointing at `catalyst_center_mcp/fetcher/__init__.py:KNOWN_SPEC_URLS`
+for manual edits. The regex remains exercised by a synthetic-HTML test
+suite so it stays correct if DevNet publishes a static, fully-linked
+index in future.
