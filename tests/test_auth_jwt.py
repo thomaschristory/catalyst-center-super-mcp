@@ -35,3 +35,53 @@ def test_decode_opaque_returns_none():
 def test_decode_garbage_segments_returns_none():
     # Three segments but middle one isn't valid base64-encoded JSON.
     assert _decode_jwt_payload("aaa.!!!.ccc") is None
+
+
+import pytest
+
+from catalyst_center_mcp.auth import CatalystCenterAuth
+
+
+def _auth_with_token(token: str) -> CatalystCenterAuth:
+    """Construct an auth object and inject a token directly (skipping HTTP)."""
+    auth = CatalystCenterAuth(
+        host="example.com", port=443, username="u", password="p", verify_ssl=False
+    )
+    auth._token = token  # type: ignore[attr-defined]
+    payload = _decode_jwt_payload(token)
+    auth._expires_at = float(payload["exp"]) if payload and "exp" in payload else None  # type: ignore[attr-defined]
+    return auth
+
+
+def test_expires_in_with_valid_jwt():
+    now = int(time.time())
+    auth = _auth_with_token(_make_jwt({"exp": now + 3600}))
+    remaining = auth.expires_in()
+    assert remaining is not None
+    assert 3599 <= remaining <= 3601
+
+
+def test_expires_in_none_for_opaque():
+    auth = _auth_with_token("opaque-token")
+    assert auth.expires_in() is None
+
+
+@pytest.mark.parametrize(
+    "exp_delta, margin, expected",
+    [
+        (3600, 120, False),  # plenty of time
+        (60, 120, True),     # inside margin
+        (200, 120, False),   # outside margin
+        (200, 300, True),    # margin widened past remaining
+    ],
+)
+def test_needs_refresh(exp_delta, margin, expected):
+    now = int(time.time())
+    auth = _auth_with_token(_make_jwt({"exp": now + exp_delta}))
+    assert auth.needs_refresh(margin_seconds=margin) is expected
+
+
+def test_needs_refresh_opaque_token_never_refreshes():
+    auth = _auth_with_token("opaque")
+    assert auth.needs_refresh(margin_seconds=120) is False
+    assert auth.needs_refresh(margin_seconds=99999) is False
