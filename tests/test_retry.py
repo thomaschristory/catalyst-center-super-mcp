@@ -297,3 +297,46 @@ async def test_backoff_base_zero_skips_sleep(
     await d.close()
     assert result == {"response": 1, "version": "1.0"}
     assert _recorded_sleeps == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_mixed_mode_failure_sequence(
+    minimal_specs_dir: Path, _instant_sleep: None
+) -> None:
+    """ConnectError → 503 → 200 — both retry branches compose without resetting attempts."""
+    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+        side_effect=[
+            httpx.ConnectError("network blip"),
+            httpx.Response(503, text="still busy"),
+            httpx.Response(200, json={"response": 42, "version": "1.0"}),
+        ]
+    )
+    d = _make_dispatcher(
+        minimal_specs_dir,
+        retry=RetryConfig(max_attempts=3, statuses=(503,), backoff_base=0.0),
+    )
+    result = await d.call("get_devices_count__network_device", {})
+    await d.close()
+    assert result == {"response": 42, "version": "1.0"}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_exception_exhaustion_returns_error_envelope(
+    minimal_specs_dir: Path, _instant_sleep: None
+) -> None:
+    """When all attempts fail with RequestError, returns {error: True, message: ...}."""
+    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+        side_effect=httpx.ConnectError("down"),
+    )
+    d = _make_dispatcher(
+        minimal_specs_dir,
+        retry=RetryConfig(max_attempts=3, statuses=(503,), backoff_base=0.0),
+    )
+    result = await d.call("get_devices_count__network_device", {})
+    await d.close()
+    assert isinstance(result, dict)
+    assert result.get("error") is True
+    assert "Request failed" in result.get("message", "")
+    assert route.call_count == 3
