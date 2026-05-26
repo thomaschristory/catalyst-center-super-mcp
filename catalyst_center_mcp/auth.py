@@ -15,9 +15,31 @@ JSON-RPC stream on the default stdio transport.
 
 from __future__ import annotations
 
+import base64
+import json
 import sys
+import time
 
 import httpx
+
+
+def _decode_jwt_payload(token: str) -> dict | None:
+    """Decode a JWT payload without signature verification.
+
+    Returns None for any token that isn't a parseable three-segment JWT with a
+    JSON payload — including opaque tokens, empty strings, and malformed JWTs.
+    Catalyst Center is expected to return JWTs (ES256), but the dispatcher must
+    tolerate opaque tokens without crashing.
+    """
+    if not token or token.count(".") != 2:
+        return None
+    try:
+        _, payload_b64, _ = token.split(".")
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded))
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 class AuthError(RuntimeError):
