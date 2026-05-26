@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Tracking PRs land against the [v0.3.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/2).
 
+### Added
+- **`catalyst-center-mcp fetch <version>` / `--all-known`** — download specs without starting the server. (PR #13)
+- **`catalyst-center-mcp list-versions`** — enumerate known + on-disk versions offline. (PR #13)
+- **`catalyst-center-mcp discover-versions`** *(experimental)* — diff DevNet's docs page against `KNOWN_SPEC_URLS`. The live DevNet page is currently JS-only, so this command exits 2 against the real URL; the parser is forward-compatible if Cisco publishes static markup again. Helper only — does not mutate the hardcoded table. (PR #17)
+- **`milestone-rollover.yml` workflow** — closes the just-tagged milestone, opens the next-patch one. Triggers on tag push. (PR #15)
+- **Focused `tests/test_retry.py`** — jitter bounds, backoff cap, network-exception retry semantics, exhaustion outcome. (PR #14)
+
 ### Changed (behavior — read this if you upgrade)
 - The default config filename is now `catalyst-center-mcp.yaml` (was `config.yaml`).
   The server still loads `config.yaml` with a stderr DEPRECATION warning if the
