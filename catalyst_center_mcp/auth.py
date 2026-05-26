@@ -15,9 +15,31 @@ JSON-RPC stream on the default stdio transport.
 
 from __future__ import annotations
 
+import base64
+import json
 import sys
+import time
 
 import httpx
+
+
+def _decode_jwt_payload(token: str) -> dict[str, object] | None:
+    """Decode a JWT payload without signature verification.
+
+    Returns None for any token that isn't a parseable three-segment JWT with a
+    JSON payload — including opaque tokens, empty strings, and malformed JWTs.
+    Catalyst Center is expected to return JWTs (ES256), but the dispatcher must
+    tolerate opaque tokens without crashing.
+    """
+    if not token or token.count(".") != 2:
+        return None
+    try:
+        _, payload_b64, _ = token.split(".")
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded))
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 class AuthError(RuntimeError):
@@ -42,6 +64,7 @@ class CatalystCenterAuth:
         self._password = password
         self._verify_ssl = verify_ssl
         self._token: str = ""
+        self._expires_at: float | None = None
 
     async def login(self, client: httpx.AsyncClient) -> None:
         """POST /dna/system/api/v1/auth/token with HTTP Basic, store the JWT."""
@@ -73,6 +96,36 @@ class CatalystCenterAuth:
         if not isinstance(token, str) or not token:
             raise AuthError(f"Login response missing 'Token' field. Body keys: {list(data.keys())}")
         self._token = token
+        payload = _decode_jwt_payload(token)
+        exp = payload.get("exp") if payload else None
+        # Reject bool — bool is a subclass of int so isinstance(True, int) is True,
+        # which would produce _expires_at=1.0 (epoch 1970) and a permanent
+        # needs_refresh() loop.
+        if isinstance(exp, (int, float)) and not isinstance(exp, bool):
+            self._expires_at = float(exp)
+            # Clock-skew guard: if server clock is ahead of local, exp may
+            # already be in the past locally. Degrade to reactive-only rather
+            # than refreshing on every call.
+            if self._expires_at <= time.time():
+                print(
+                    f"[auth] WARNING: JWT exp ({self._expires_at}) is already "
+                    f"in the past locally (clock skew?) — falling back to "
+                    f"reactive refresh only",
+                    file=sys.stderr,
+                )
+                self._expires_at = None
+        else:
+            self._expires_at = None
+            if payload is not None:
+                # JWT decoded successfully but exp claim is missing or wrong
+                # type — surface format drift instead of silently downgrading.
+                trimmed = repr(exp)[:60]
+                print(
+                    f"[auth] WARNING: JWT decoded but exp claim unusable "
+                    f"(type={type(exp).__name__}, value={trimmed}) — falling "
+                    f"back to reactive refresh only",
+                    file=sys.stderr,
+                )
         print(f"[auth] Catalyst Center login successful at {self._base_url}", file=sys.stderr)
 
     def header(self) -> dict[str, str]:
@@ -80,3 +133,14 @@ class CatalystCenterAuth:
         if not self._token:
             raise AuthError("Not authenticated — call login() first")
         return {"X-Auth-Token": self._token}
+
+    def expires_in(self) -> float | None:
+        """Seconds until the JWT expires, or None for opaque/missing tokens."""
+        if self._expires_at is None:
+            return None
+        return self._expires_at - time.time()
+
+    def needs_refresh(self, margin_seconds: int = 120) -> bool:
+        """True iff the token expires within `margin_seconds`. Opaque tokens → False."""
+        remaining = self.expires_in()
+        return remaining is not None and remaining <= margin_seconds
