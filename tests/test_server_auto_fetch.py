@@ -11,7 +11,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_fetch_skipped_when_version_dir_has_json(tmp_path: Path):
     """Real-world default: specs already present → no fetch."""
-    from catalyst_center_mcp import server  # noqa: WPS433 (local import for patching)
+    from catalyst_center_mcp import server
 
     version_dir = tmp_path / "2.3.7.9"
     version_dir.mkdir()
