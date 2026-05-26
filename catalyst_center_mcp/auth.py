@@ -98,7 +98,34 @@ class CatalystCenterAuth:
         self._token = token
         payload = _decode_jwt_payload(token)
         exp = payload.get("exp") if payload else None
-        self._expires_at = float(exp) if isinstance(exp, (int, float)) else None
+        # Reject bool — bool is a subclass of int so isinstance(True, int) is True,
+        # which would produce _expires_at=1.0 (epoch 1970) and a permanent
+        # needs_refresh() loop.
+        if isinstance(exp, (int, float)) and not isinstance(exp, bool):
+            self._expires_at = float(exp)
+            # Clock-skew guard: if server clock is ahead of local, exp may
+            # already be in the past locally. Degrade to reactive-only rather
+            # than refreshing on every call.
+            if self._expires_at <= time.time():
+                print(
+                    f"[auth] WARNING: JWT exp ({self._expires_at}) is already "
+                    f"in the past locally (clock skew?) — falling back to "
+                    f"reactive refresh only",
+                    file=sys.stderr,
+                )
+                self._expires_at = None
+        else:
+            self._expires_at = None
+            if payload is not None:
+                # JWT decoded successfully but exp claim is missing or wrong
+                # type — surface format drift instead of silently downgrading.
+                trimmed = repr(exp)[:60]
+                print(
+                    f"[auth] WARNING: JWT decoded but exp claim unusable "
+                    f"(type={type(exp).__name__}, value={trimmed}) — falling "
+                    f"back to reactive refresh only",
+                    file=sys.stderr,
+                )
         print(f"[auth] Catalyst Center login successful at {self._base_url}", file=sys.stderr)
 
     def header(self) -> dict[str, str]:
