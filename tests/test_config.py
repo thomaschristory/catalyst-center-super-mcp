@@ -217,9 +217,7 @@ def test_resolve_falls_back_to_legacy_with_warning(
     assert "v0.4.0" in captured.err
 
 
-def test_resolve_no_fallback_when_explicit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_resolve_no_fallback_when_explicit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """If --config was passed explicitly, never fall back to the legacy name."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config.yaml").write_text("catalyst_center:\n  host: x\n")
