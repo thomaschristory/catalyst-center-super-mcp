@@ -163,6 +163,36 @@ def _last_non_templated_segment(segments: list[str]) -> str:
     return "root"
 
 
+_API_PREFIXES = (
+    "/dna/intent/api/v1/",
+    "/dna/system/api/v1/",
+    "/dna/data/api/v1/",
+    "/dna/",
+)
+
+
+def _path_discriminator(path: str, exclude_leaf: str, *, strip_api_prefix: bool = True) -> str:
+    """Build a slug from a URL path for use as a disambiguating suffix.
+
+    By default strips the API prefix (e.g. ``/dna/intent/api/v1/``), removes
+    path params (``{foo}`` → ``""``), drops the trailing leaf already encoded
+    in the bare action name, then slugifies. Pass ``strip_api_prefix=False``
+    to keep the prefix as part of the discriminator — useful when two paths
+    that differ only in their API family (intent vs data) collide otherwise.
+    """
+    stripped = path
+    if strip_api_prefix:
+        for prefix in _API_PREFIXES:
+            if stripped.startswith(prefix):
+                stripped = stripped[len(prefix) :]
+                break
+    stripped = stripped.strip("/")
+    segments = [s for s in stripped.split("/") if s and not _TEMPLATED_RE.match(s)]
+    if segments and _slugify(segments[-1]) == exclude_leaf:
+        segments = segments[:-1]
+    return _slugify("_".join(segments)) or "root"
+
+
 def _tag_section(tag: str) -> str:
     return tag.split(" - ", 1)[0].strip()
 
@@ -468,6 +498,64 @@ def _dedupe_tool_names(groups: list[ToolGroup]) -> None:
         seen[base] = count + 1
 
 
+def _disambiguate_cross_tool(groups: list[ToolGroup]) -> None:
+    """Pre-pass: any action_name appearing in >1 op (across all tools) is
+    rewritten as ``<bare>__<path-discriminator>`` for *every* colliding op.
+
+    Backward-compat invariant: an action_name that was unique stays unchanged.
+
+    Two-pass discriminator: pass 1 strips the API prefix (so ``intent/api/v1``
+    and ``data/api/v1`` are folded together — the common case). Any
+    ``<bare>__<disc>`` slugs that *still* collide after pass 1 (different API
+    families share an otherwise-identical path tail) are re-resolved with the
+    full path (no prefix stripped) so the family becomes part of the
+    discriminator. If a residual collision remains even then, a numeric
+    suffix (``__2``, ``__3``, …) is appended for stability.
+
+    Numeric-tiebreaker ordering: colliding ops are sorted by ``(method, path)``
+    before numeric suffixes are assigned. Both keys are stable across Cisco
+    operationId renames and across changes in OpenAPI document order, so the
+    same op gets the same ``__N`` slot deterministically on every load.
+    """
+    occurrences: dict[str, list[OperationSpec]] = {}
+    for group in groups:
+        for op in group.operations:
+            occurrences.setdefault(op.action_name, []).append(op)
+
+    # Pass 1 — strip the API prefix.
+    for bare, ops in occurrences.items():
+        if len(ops) < 2:
+            continue
+        leaf = bare.rsplit("_", 1)[-1]
+        for op in ops:
+            disc = _path_discriminator(op.path, exclude_leaf=leaf)
+            op.action_name = f"{bare}__{disc}"
+
+    # Pass 2 — re-collect names; any that still collide get the API family
+    # baked into the discriminator.
+    occurrences2: dict[str, list[OperationSpec]] = {}
+    for group in groups:
+        for op in group.operations:
+            occurrences2.setdefault(op.action_name, []).append(op)
+
+    for name, ops in occurrences2.items():
+        if len(ops) < 2:
+            continue
+        # Recover the original bare (everything before the last "__").
+        bare = name.rsplit("__", 1)[0] if "__" in name else name
+        leaf = bare.rsplit("_", 1)[-1]
+        # Sort by (method, path) so the numeric tiebreaker is stable across
+        # spec re-orderings — see docstring.
+        ops_sorted = sorted(ops, key=lambda o: (o.method, o.path))
+        rewritten: dict[str, int] = {}
+        for op in ops_sorted:
+            disc = _path_discriminator(op.path, exclude_leaf=leaf, strip_api_prefix=False)
+            candidate = f"{bare}__{disc}"
+            count = rewritten.get(candidate, 0)
+            op.action_name = candidate if count == 0 else f"{candidate}__{count + 1}"
+            rewritten[candidate] = count + 1
+
+
 def _dedupe_action_names(group: ToolGroup) -> None:
     """In-place: make every op.action_name unique within its tool by appending _2, _3, ..."""
     seen: dict[str, int] = {}
@@ -590,6 +678,7 @@ class SpecLoader:
             groups.extend(_split_section(section, section_ops, self.max_actions_per_tool))
 
         _dedupe_tool_names(groups)
+        _disambiguate_cross_tool(groups)
         for group in groups:
             _dedupe_action_names(group)
 
@@ -621,6 +710,10 @@ class SpecLoader:
         index = SpecIndex(groups=groups)
         for group in groups:
             for op in group.operations:
+                # TODO(disambig): residual post-disambig collisions are silently
+                # dropped here (only a warning is logged). Not hit by current
+                # 2.3.7.9/3.1.3 specs but the mechanism is latent — see PR #9
+                # adversarial-review notes.
                 if op.action_name in index.by_action_name:
                     print(
                         f"[loader] WARNING: duplicate action_name '{op.action_name}' "

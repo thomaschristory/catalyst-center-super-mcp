@@ -60,7 +60,7 @@ async def test_get_with_query_params(minimal_specs_dir: Path) -> None:
         return_value=httpx.Response(200, json={"response": 4, "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir)
-    result = await d.call("get_devices_count", {})
+    result = await d.call("get_devices_count__network_device", {})
     await d.close()
     assert result == {"response": 4, "version": "1.0"}
     assert route.called
@@ -73,7 +73,9 @@ async def test_path_param_substituted(minimal_specs_dir: Path) -> None:
         return_value=httpx.Response(200, json={"response": {"id": "abc-123"}, "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir)
-    result = await d.call("get_devices_network_device_2", {"id": "abc-123"})
+    result = await d.call(
+        "get_devices_network_device__dna_intent_api_v1_network_device__2", {"id": "abc-123"}
+    )
     await d.close()
     assert result["response"]["id"] == "abc-123"
 
@@ -82,7 +84,7 @@ async def test_path_param_substituted(minimal_specs_dir: Path) -> None:
 @respx.mock
 async def test_missing_path_param_returns_error(minimal_specs_dir: Path) -> None:
     d = _make_dispatcher(minimal_specs_dir)
-    result = await d.call("get_devices_network_device_2", {})
+    result = await d.call("get_devices_network_device__dna_intent_api_v1_network_device__2", {})
     await d.close()
     assert isinstance(result, dict)
     assert result.get("error") is True
@@ -114,7 +116,7 @@ async def test_x_auth_token_header_sent(minimal_specs_dir: Path) -> None:
         return_value=httpx.Response(200, json={"response": 4, "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir)
-    await d.call("get_devices_count", {})
+    await d.call("get_devices_count__network_device", {})
     await d.close()
     assert route.calls[0].request.headers["X-Auth-Token"] == "pre-set-token"
 
@@ -133,7 +135,7 @@ async def test_401_triggers_reauth_and_retry(minimal_specs_dir: Path) -> None:
         ]
     )
     d = _make_dispatcher(minimal_specs_dir)
-    result = await d.call("get_devices_count", {})
+    result = await d.call("get_devices_count__network_device", {})
     await d.close()
     assert result == {"response": 7, "version": "1.0"}
     assert count_route.call_count == 2
@@ -152,7 +154,7 @@ async def test_persistent_401_returns_error(minimal_specs_dir: Path) -> None:
         return_value=httpx.Response(401, json={"error": "still expired"})
     )
     d = _make_dispatcher(minimal_specs_dir)
-    result = await d.call("get_devices_count", {})
+    result = await d.call("get_devices_count__network_device", {})
     await d.close()
     assert isinstance(result, dict)
     assert result.get("error") is True
@@ -172,7 +174,7 @@ async def test_retry_recovers_after_503(minimal_specs_dir: Path) -> None:
         minimal_specs_dir,
         retry=RetryConfig(max_attempts=3, statuses=(503,), backoff_base=0.0),
     )
-    result = await d.call("get_devices_count", {})
+    result = await d.call("get_devices_count__network_device", {})
     await d.close()
     assert result == {"response": 1, "version": "1.0"}
 
@@ -204,7 +206,7 @@ async def test_reserved_params_stripped(minimal_specs_dir: Path) -> None:
     )
     d = _make_dispatcher(minimal_specs_dir)
     await d.call(
-        "get_devices_network_device",
+        "get_devices_network_device__dna_intent_api_v1_network_device",
         {"_max_pages": 2, "_page_size": 50, "_auto_follow": False, "hostname": "r1"},
     )
     await d.close()
@@ -222,7 +224,10 @@ async def test_auto_follow_off_short_circuits_pagination(minimal_specs_dir: Path
     d = _make_dispatcher(minimal_specs_dir)
     # Even though the server returns a full page (which would normally trigger
     # auto-follow), _auto_follow=False forces single-page mode.
-    result = await d.call("get_devices_network_device", {"limit": 50, "_auto_follow": False})
+    result = await d.call(
+        "get_devices_network_device__dna_intent_api_v1_network_device",
+        {"limit": 50, "_auto_follow": False},
+    )
     await d.close()
     assert route.call_count == 1
     # Single-page passthrough — no _paginated wrapping.
@@ -240,7 +245,9 @@ async def test_auto_follow_stitches_paginated_endpoint(minimal_specs_dir: Path) 
         ]
     )
     d = _make_dispatcher(minimal_specs_dir, pagination=PaginationConfig(enabled=True, max_pages=3))
-    result = await d.call("get_devices_network_device", {"limit": 3})
+    result = await d.call(
+        "get_devices_network_device__dna_intent_api_v1_network_device", {"limit": 3}
+    )
     await d.close()
     assert result["response"] == [1, 2, 3, 4]
     assert result["_paginated"]["pages"] == 2

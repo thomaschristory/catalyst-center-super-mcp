@@ -28,6 +28,14 @@
         "parameters": []
       }
     },
+    "/dna/intent/api/v1/security/rogues/count": {
+      "get": {
+        "tags": ["Devices"],
+        "operationId": "getRoguesCount",
+        "summary": "Get rogue count",
+        "responses": {"200": {"description": "OK"}}
+      }
+    },
     "/dna/intent/api/v1/network-device/{id}": {
       "get": {
         "tags": ["Devices"],
