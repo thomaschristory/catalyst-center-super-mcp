@@ -18,6 +18,38 @@ import yaml
 _TOKEN_HARD_MIN = 8
 _TOKEN_SOFT_MIN = 16
 
+DEFAULT_CONFIG_PATH = "catalyst-center-mcp.yaml"
+_LEGACY_CONFIG_PATH = "config.yaml"
+
+
+def resolve_config_path(path: str, *, explicit: bool) -> tuple[str, bool]:
+    """Resolve the effective config path, honoring the v0.3.0 rename.
+
+    Returns ``(effective_path, used_legacy)``. When ``explicit`` is True the
+    user passed ``--config`` so we return ``path`` unchanged and never fall
+    back to the legacy name. When ``explicit`` is False (default path) and
+    ``catalyst-center-mcp.yaml`` is absent but ``config.yaml`` exists, we
+    return the legacy name and emit a one-line stderr DEPRECATION warning.
+
+    TODO(v0.4.0): remove the legacy fallback. The deprecation warning has
+    been live since v0.3.0; users have one minor cycle to rename their file.
+    """
+    if explicit:
+        return path, False
+    if Path(path).exists():
+        return path, False
+    legacy = Path(_LEGACY_CONFIG_PATH)
+    if legacy.exists():
+        # stderr-only; stdio MCP uses stdout for JSON-RPC.
+        print(
+            f"[config] DEPRECATION: '{_LEGACY_CONFIG_PATH}' is the v0.2.0 default; "
+            f"rename to '{DEFAULT_CONFIG_PATH}' before v0.4.0. "
+            f"  mv {_LEGACY_CONFIG_PATH} {DEFAULT_CONFIG_PATH}",
+            file=sys.stderr,
+        )
+        return _LEGACY_CONFIG_PATH, True
+    return path, False
+
 
 @dataclass
 class RetryConfig:
