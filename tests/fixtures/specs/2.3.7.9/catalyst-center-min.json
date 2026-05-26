@@ -1,0 +1,65 @@
+{
+  "openapi": "3.0.0",
+  "info": {"title": "Catalyst Center Minimal Test Fixture", "version": "2.3.7.9"},
+  "paths": {
+    "/dna/intent/api/v1/network-device": {
+      "get": {
+        "tags": ["Devices"],
+        "operationId": "getDeviceList",
+        "summary": "List network devices",
+        "parameters": [
+          {"name": "hostname", "in": "query", "required": false, "schema": {"type": "string"}},
+          {"name": "offset", "in": "query", "required": false, "schema": {"type": "integer"}},
+          {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer"}}
+        ]
+      },
+      "post": {
+        "tags": ["Devices"],
+        "operationId": "addDevice",
+        "summary": "Add a network device",
+        "requestBody": {"description": "Device payload"}
+      }
+    },
+    "/dna/intent/api/v1/network-device/count": {
+      "get": {
+        "tags": ["Devices"],
+        "operationId": "getDeviceCount",
+        "summary": "Count network devices",
+        "parameters": []
+      }
+    },
+    "/dna/intent/api/v1/network-device/{id}": {
+      "get": {
+        "tags": ["Devices"],
+        "operationId": "getDeviceById",
+        "summary": "Get a network device by id",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}
+        ]
+      }
+    },
+    "/dna/intent/api/v1/site": {
+      "get": {
+        "tags": ["Sites"],
+        "operationId": "getSiteList",
+        "summary": "List sites",
+        "parameters": [
+          {"name": "offset", "in": "query", "required": false, "schema": {"type": "integer"}},
+          {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer"}}
+        ]
+      }
+    },
+    "/dna/data/api/v1/clients": {
+      "get": {
+        "tags": ["Clients"],
+        "operationId": "getClients",
+        "summary": "List clients (cursor pagination)",
+        "parameters": [
+          {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string"}},
+          {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer"}}
+        ]
+      }
+    }
+  },
+  "components": {"schemas": {}}
+}
