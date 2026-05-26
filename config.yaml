@@ -21,7 +21,7 @@ catalyst_center_mcp:
   # docs/superpowers/findings/2026-05-25-spec-diff.md once Task 4 runs.
   active_version: "2.3.7.9"
   max_actions_per_tool: 80               # adaptive splitter cap; 0 disables splitting
-  auto_fetch: false                      # v0.1.0 ships without fetcher; flip when fetcher/ is real
+  auto_fetch: true                       # auto-download spec for active_version when missing
   pagination:
     enabled: true
     max_pages: 5
