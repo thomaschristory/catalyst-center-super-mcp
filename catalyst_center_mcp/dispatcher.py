@@ -59,6 +59,7 @@ class Dispatcher:
         self._index: SpecIndex | None = None
         self._pagination_cfg = pagination or PaginationConfig()
         self._retry_cfg = retry or RetryConfig()
+        self._auth_lock = asyncio.Lock()
 
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
@@ -80,6 +81,14 @@ class Dispatcher:
     async def call(self, action_name: str, params: dict[str, Any]) -> DispatchResult:
         if self._index is None:
             raise RuntimeError("SpecIndex not set — call set_index() first")
+
+        async with self._auth_lock:
+            if self._auth.needs_refresh():
+                print(
+                    "[dispatcher] Token nearing expiry — proactive refresh",
+                    file=sys.stderr,
+                )
+                await self._auth.login(self._client)
 
         op = self._index.by_action_name.get(action_name)
         if op is None:
@@ -135,7 +144,12 @@ class Dispatcher:
         response = await self._execute(op, params)
         if isinstance(response, dict) and response.get("_token_expired"):
             print("[dispatcher] Token expired — re-authenticating", file=sys.stderr)
-            await self._auth.login(self._client)
+            stale_token = self._auth._token
+            async with self._auth_lock:
+                # Double-check: if another concurrent call already refreshed
+                # while we waited for the lock, the token will have changed.
+                if self._auth._token == stale_token:
+                    await self._auth.login(self._client)
             response = await self._execute(op, params)
             if isinstance(response, dict) and response.get("_token_expired"):
                 # Persistent 401 after re-auth — surface as a proper error
