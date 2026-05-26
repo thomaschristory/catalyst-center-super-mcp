@@ -163,6 +163,32 @@ def _last_non_templated_segment(segments: list[str]) -> str:
     return "root"
 
 
+_API_PREFIXES = (
+    "/dna/intent/api/v1/",
+    "/dna/system/api/v1/",
+    "/dna/data/api/v1/",
+    "/dna/",
+)
+
+
+def _path_discriminator(path: str, exclude_leaf: str) -> str:
+    """Build a slug from a URL path for use as a disambiguating suffix.
+
+    Strips the API prefix, removes path params ({foo} → ""), drops the
+    trailing leaf already encoded in the bare action name, then slugifies.
+    """
+    stripped = path
+    for prefix in _API_PREFIXES:
+        if stripped.startswith(prefix):
+            stripped = stripped[len(prefix) :]
+            break
+    stripped = stripped.strip("/")
+    segments = [s for s in stripped.split("/") if s and not _TEMPLATED_RE.match(s)]
+    if segments and _slugify(segments[-1]) == exclude_leaf:
+        segments = segments[:-1]
+    return _slugify("_".join(segments)) or "root"
+
+
 def _tag_section(tag: str) -> str:
     return tag.split(" - ", 1)[0].strip()
 
@@ -468,6 +494,26 @@ def _dedupe_tool_names(groups: list[ToolGroup]) -> None:
         seen[base] = count + 1
 
 
+def _disambiguate_cross_tool(groups: list[ToolGroup]) -> None:
+    """Pre-pass: any action_name appearing in >1 op (across all tools) is
+    rewritten as <bare>__<path-discriminator> for *every* colliding op.
+
+    Backward-compat invariant: an action_name that was unique stays unchanged.
+    """
+    occurrences: dict[str, list[OperationSpec]] = {}
+    for group in groups:
+        for op in group.operations:
+            occurrences.setdefault(op.action_name, []).append(op)
+
+    for bare, ops in occurrences.items():
+        if len(ops) < 2:
+            continue
+        leaf = bare.rsplit("_", 1)[-1]
+        for op in ops:
+            disc = _path_discriminator(op.path, exclude_leaf=leaf)
+            op.action_name = f"{bare}__{disc}"
+
+
 def _dedupe_action_names(group: ToolGroup) -> None:
     """In-place: make every op.action_name unique within its tool by appending _2, _3, ..."""
     seen: dict[str, int] = {}
@@ -590,6 +636,7 @@ class SpecLoader:
             groups.extend(_split_section(section, section_ops, self.max_actions_per_tool))
 
         _dedupe_tool_names(groups)
+        _disambiguate_cross_tool(groups)
         for group in groups:
             _dedupe_action_names(group)
 
