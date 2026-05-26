@@ -34,7 +34,10 @@ def _build_parser() -> argparse.ArgumentParser:
     group.add_argument(
         "--all-known",
         action="store_true",
-        help=f"fetch every version in KNOWN_SPEC_URLS ({len(KNOWN_SPEC_URLS)} known).",
+        help=(
+            "fetch every version known to this build "
+            "(run 'list-versions' to see them)."
+        ),
     )
     add_config_args(parser)
     return parser
