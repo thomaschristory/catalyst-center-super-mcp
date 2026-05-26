@@ -511,6 +511,11 @@ def _disambiguate_cross_tool(groups: list[ToolGroup]) -> None:
     full path (no prefix stripped) so the family becomes part of the
     discriminator. If a residual collision remains even then, a numeric
     suffix (``__2``, ``__3``, …) is appended for stability.
+
+    Numeric-tiebreaker ordering: colliding ops are sorted by ``(method, path)``
+    before numeric suffixes are assigned. Both keys are stable across Cisco
+    operationId renames and across changes in OpenAPI document order, so the
+    same op gets the same ``__N`` slot deterministically on every load.
     """
     occurrences: dict[str, list[OperationSpec]] = {}
     for group in groups:
@@ -539,8 +544,11 @@ def _disambiguate_cross_tool(groups: list[ToolGroup]) -> None:
         # Recover the original bare (everything before the last "__").
         bare = name.rsplit("__", 1)[0] if "__" in name else name
         leaf = bare.rsplit("_", 1)[-1]
+        # Sort by (method, path) so the numeric tiebreaker is stable across
+        # spec re-orderings — see docstring.
+        ops_sorted = sorted(ops, key=lambda o: (o.method, o.path))
         rewritten: dict[str, int] = {}
-        for op in ops:
+        for op in ops_sorted:
             disc = _path_discriminator(op.path, exclude_leaf=leaf, strip_api_prefix=False)
             candidate = f"{bare}__{disc}"
             count = rewritten.get(candidate, 0)
@@ -702,6 +710,10 @@ class SpecLoader:
         index = SpecIndex(groups=groups)
         for group in groups:
             for op in group.operations:
+                # TODO(disambig): residual post-disambig collisions are silently
+                # dropped here (only a warning is logged). Not hit by current
+                # 2.3.7.9/3.1.3 specs but the mechanism is latent — see PR #9
+                # adversarial-review notes.
                 if op.action_name in index.by_action_name:
                     print(
                         f"[loader] WARNING: duplicate action_name '{op.action_name}' "
