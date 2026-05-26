@@ -95,18 +95,20 @@ def parse_discovery_html(html: str) -> dict[str, str]:
     return out
 
 
-def discover_versions(*, client: httpx.Client | None = None) -> dict[str, str]:
+def discover_versions() -> dict[str, str]:
     """Fetch DevNet's docs index page and return ``{version: pubhub_url}``.
 
-    Does NOT mutate ``KNOWN_SPEC_URLS``. Always verifies TLS.
+    Does NOT mutate ``KNOWN_SPEC_URLS``. Always verifies TLS — the helper owns
+    its httpx.Client and never accepts a caller-supplied one (preventing
+    accidental ``verify=False`` misuse).
     """
-    owns_client = client is None
-    if client is None:
-        client = httpx.Client(verify=True, timeout=30.0, follow_redirects=True)
-    try:
+    with httpx.Client(verify=True, timeout=30.0, follow_redirects=True) as client:
         response = client.get(DEVNET_INDEX_URL)
         response.raise_for_status()
+        if str(response.url).rstrip("/") != DEVNET_INDEX_URL.rstrip("/"):
+            print(
+                f"[discover] WARNING: followed redirect to {response.url} "
+                f"(expected {DEVNET_INDEX_URL}). Auth wall? Page moved?",
+                file=sys.stderr,
+            )
         return parse_discovery_html(response.text)
-    finally:
-        if owns_client:
-            client.close()
