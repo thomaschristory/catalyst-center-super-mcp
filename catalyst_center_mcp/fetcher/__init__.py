@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
@@ -133,3 +134,43 @@ async def fetch_spec(
     finally:
         if owns_client:
             await client.aclose()
+
+
+@dataclass(frozen=True)
+class VersionInfo:
+    """One row in ``list-versions`` output."""
+
+    version: str
+    cached: bool
+    extra: bool  # True when this dir is not in KNOWN_SPEC_URLS
+
+
+def _has_spec_files(version_dir: Path) -> bool:
+    if not version_dir.is_dir():
+        return False
+    return any(any(version_dir.glob(f"*.{ext}")) for ext in ("yaml", "yml", "json"))
+
+
+def list_known_versions(specs_dir: Path) -> list[VersionInfo]:
+    """Return KNOWN_SPEC_URLS + any extra on-disk version dirs, with cache state.
+
+    A version is "cached" if ``specs_dir/<version>/`` contains >=1
+    ``*.{yaml,yml,json}`` file. Empty directories are skipped.
+    """
+    known = set(KNOWN_SPEC_URLS)
+    seen: set[str] = set()
+    out: list[VersionInfo] = []
+
+    for v in sorted(known):
+        cached = _has_spec_files(specs_dir / v)
+        out.append(VersionInfo(version=v, cached=cached, extra=False))
+        seen.add(v)
+
+    if specs_dir.is_dir():
+        for sub in sorted(specs_dir.iterdir()):
+            if not sub.is_dir() or sub.name in seen:
+                continue
+            if _has_spec_files(sub):
+                out.append(VersionInfo(version=sub.name, cached=True, extra=True))
+
+    return out
