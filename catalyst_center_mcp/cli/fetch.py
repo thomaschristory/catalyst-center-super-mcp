@@ -1,0 +1,88 @@
+"""`catalyst-center-mcp fetch` subcommand: download an OpenAPI spec by version."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import sys
+from pathlib import Path
+
+import httpx
+
+from ..config import DEFAULT_CONFIG_PATH, AppConfig, load_config, resolve_config_path
+from ..fetcher import (
+    KNOWN_SPEC_URLS,
+    SpecContentInvalidError,
+    SpecVersionUnknownError,
+    fetch_spec,
+)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="catalyst-center-mcp fetch",
+        description="Download an OpenAPI spec for a Catalyst Center version.",
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "version",
+        nargs="?",
+        default=None,
+        help="version to fetch (e.g. 2.3.7.9). Mutually exclusive with --all-known.",
+    )
+    group.add_argument(
+        "--all-known",
+        action="store_true",
+        help=f"fetch every version in KNOWN_SPEC_URLS ({len(KNOWN_SPEC_URLS)} known).",
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help=f"path to the config file (default: ./{DEFAULT_CONFIG_PATH})",
+    )
+    parser.add_argument(
+        "--specs-dir",
+        default=None,
+        help="override catalyst_center_mcp.specs_dir from the config file",
+    )
+    return parser
+
+
+def _load_config_or_default(config_arg: str | None) -> AppConfig:
+    explicit = config_arg is not None
+    resolved, _ = resolve_config_path(
+        config_arg or DEFAULT_CONFIG_PATH, explicit=explicit
+    )
+    try:
+        return load_config(resolved)
+    except FileNotFoundError:
+        return AppConfig()
+
+
+def run_fetch(argv: list[str]) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    config = _load_config_or_default(args.config)
+    specs_dir = Path(args.specs_dir or config.catalyst_center_mcp.specs_dir)
+
+    versions: list[str] = (
+        list(KNOWN_SPEC_URLS) if args.all_known else [args.version]
+    )
+
+    async def _runner() -> int:
+        rc = 0
+        for v in versions:
+            try:
+                target = await fetch_spec(v, specs_dir / v)
+                print(f"[fetch] OK  {v} -> {target}", file=sys.stderr)
+            except (
+                SpecVersionUnknownError,
+                SpecContentInvalidError,
+                httpx.HTTPError,
+            ) as exc:
+                print(f"[fetch] FAIL {v}: {exc}", file=sys.stderr)
+                rc = 1
+        return rc
+
+    return asyncio.run(_runner())
