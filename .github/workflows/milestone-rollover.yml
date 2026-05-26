@@ -45,16 +45,20 @@ jobs:
           echo "Current milestone: $CURRENT"
           echo "Next milestone:    $NEXT"
 
-          # Close the current milestone if it exists and is still open.
-          CURRENT_NUM="$(gh api "repos/${GH_REPO}/milestones?state=open&per_page=100" \
-            --jq ".[] | select(.title == \"${CURRENT}\") | .number" | head -n1)"
+          # Look up the current milestone in any state so we can distinguish
+          # "doesn't exist" from "already closed".
+          CURRENT_ANY="$(gh api "repos/${GH_REPO}/milestones?state=all&per_page=100" \
+            --jq ".[] | select(.title == \"${CURRENT}\") | {number, state}" | head -n1)"
 
-          if [ -n "${CURRENT_NUM:-}" ]; then
+          if [ -z "${CURRENT_ANY}" ]; then
+            echo "::warning::Milestone ${CURRENT} does not exist — release shipped without milestone tracking."
+          elif echo "${CURRENT_ANY}" | grep -q '"state":"closed"'; then
+            echo "Milestone ${CURRENT} is already closed; skipping."
+          else
+            CURRENT_NUM="$(echo "${CURRENT_ANY}" | jq -r '.number')"
             echo "Closing milestone ${CURRENT} (#${CURRENT_NUM})"
             gh api -X PATCH "repos/${GH_REPO}/milestones/${CURRENT_NUM}" \
               -f state=closed >/dev/null
-          else
-            echo "Milestone ${CURRENT} not found or already closed; skipping close."
           fi
 
           # Open the next-patch milestone if it doesn't already exist (in any state).
