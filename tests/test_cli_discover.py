@@ -77,9 +77,30 @@ def test_discover_unchanged_when_exact_match(
 
 
 @respx.mock
-def test_discover_devnet_unreachable_returns_nonzero(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_discover_503_returns_exit_2() -> None:
+    """Network errors specifically return exit 2 (not 1, not bare nonzero)."""
     respx.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(503))
-    rc = run_discover_versions([])
-    assert rc != 0
+    assert run_discover_versions([]) == 2
+
+
+@respx.mock
+def test_discover_connect_error_returns_exit_2() -> None:
+    """ConnectError (not just HTTP status errors) returns exit 2."""
+    respx.get(DEVNET_INDEX_URL).mock(side_effect=httpx.ConnectError("dns fail"))
+    assert run_discover_versions([]) == 2
+
+
+@respx.mock
+def test_discover_shape_changed_returns_exit_2() -> None:
+    """A 200 with no recognizable URLs (SPA / shape changed) → DiscoveryError → exit 2."""
+    respx.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(200, text="<html>spa</html>"))
+    assert run_discover_versions([]) == 2
+
+
+def test_help_marks_experimental(capsys: pytest.CaptureFixture[str]) -> None:
+    """[experimental] marker must remain visible in --help output."""
+    with pytest.raises(SystemExit):
+        run_discover_versions(["--help"])
+    captured = capsys.readouterr()
+    output = (captured.out + captured.err).lower()
+    assert "experimental" in output
