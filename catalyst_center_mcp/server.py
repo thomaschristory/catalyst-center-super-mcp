@@ -36,7 +36,7 @@ from .tools import register_tools
 from .transport_auth import BearerAuthMiddleware, decide_bind
 
 _VALID_TRANSPORTS: frozenset[str] = frozenset({"stdio", "sse", "streamable-http"})
-_SUBCOMMANDS: frozenset[str] = frozenset({"fetch", "list-versions"})
+_SUBCOMMANDS: frozenset[str] = frozenset({"fetch", "list-versions", "discover-versions"})
 TransportMode = Literal["stdio", "sse", "streamable-http"]
 
 
@@ -265,6 +265,10 @@ def main(argv: list[str] | None = None) -> int:
             from .cli.list_versions import run_list_versions
 
             return run_list_versions(rest)
+        if sub == "discover-versions":
+            from .cli.discover import run_discover_versions
+
+            return run_discover_versions(rest)
 
     args = parse_args(raw)
     explicit = args.config is not None
