@@ -36,6 +36,7 @@ from .tools import register_tools
 from .transport_auth import BearerAuthMiddleware, decide_bind
 
 _VALID_TRANSPORTS: frozenset[str] = frozenset({"stdio", "sse", "streamable-http"})
+_SUBCOMMANDS: frozenset[str] = frozenset({"fetch", "list-versions"})
 TransportMode = Literal["stdio", "sse", "streamable-http"]
 
 
@@ -253,7 +254,19 @@ def build_and_run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
+    raw = list(argv) if argv is not None else sys.argv[1:]
+    if raw and raw[0] in _SUBCOMMANDS:
+        sub, rest = raw[0], raw[1:]
+        if sub == "fetch":
+            from .cli.fetch import run_fetch
+
+            return run_fetch(rest)
+        if sub == "list-versions":
+            from .cli.list_versions import run_list_versions
+
+            return run_list_versions(rest)
+
+    args = parse_args(raw)
     explicit = args.config is not None
     config_path, _used_legacy = resolve_config_path(
         args.config or DEFAULT_CONFIG_PATH,

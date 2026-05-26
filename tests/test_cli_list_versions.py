@@ -32,9 +32,7 @@ def test_list_versions_prints_two_sections(
         assert v in out
 
 
-def test_list_versions_marks_cached(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_list_versions_marks_cached(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     v = next(iter(KNOWN_SPEC_URLS))
     specs = tmp_path / "specs"
     (specs / v).mkdir(parents=True)
@@ -44,15 +42,11 @@ def test_list_versions_marks_cached(
     assert rc == 0
     out = capsys.readouterr().out
     # The version line for v should mention "cached".
-    cached_line = next(
-        line for line in out.splitlines() if v in line and "cached" in line
-    )
+    cached_line = next(line for line in out.splitlines() if v in line and "cached" in line)
     assert cached_line  # truthy
 
 
-def test_list_versions_lists_extra_dir(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_list_versions_lists_extra_dir(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     specs = tmp_path / "specs"
     (specs / "9.9.9-custom").mkdir(parents=True)
     (specs / "9.9.9-custom" / "x.json").write_text("{}")
@@ -63,9 +57,7 @@ def test_list_versions_lists_extra_dir(
     assert rc == 0
 
 
-def test_list_versions_no_network(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_list_versions_no_network(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Block any outgoing HTTP — list-versions must be offline.
     import httpx
 
