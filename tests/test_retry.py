@@ -301,9 +301,7 @@ async def test_backoff_base_zero_skips_sleep(
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_mixed_mode_failure_sequence(
-    minimal_specs_dir: Path, _instant_sleep: None
-) -> None:
+async def test_mixed_mode_failure_sequence(minimal_specs_dir: Path, _instant_sleep: None) -> None:
     """ConnectError → 503 → 200 — both retry branches compose without resetting attempts."""
     respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         side_effect=[
