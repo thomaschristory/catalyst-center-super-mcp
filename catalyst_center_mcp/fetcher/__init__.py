@@ -7,10 +7,19 @@ they can add a new entry.
 
 The server invokes this at startup when
 catalyst_center_mcp.auto_fetch is true and the version directory is empty.
+
+Security note — TLS verification:
+    The downloads target pubhub.devnetcloud.com, a public HTTPS CDN. This
+    fetcher ALWAYS verifies TLS (`verify=True`) regardless of what the
+    Catalyst Center config says about `verify_ssl`. Catalyst Center
+    deployments often use self-signed certs, but that property has no
+    bearing on whether we trust a public CDN — disabling verification
+    here would open a MITM vector to inject a malicious spec.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -30,22 +39,57 @@ class SpecVersionUnknownError(RuntimeError):
     """Raised when fetch_spec is asked for a version not in KNOWN_SPEC_URLS."""
 
 
+class SpecContentInvalidError(RuntimeError):
+    """Raised when the downloaded body parses as JSON but isn't an OpenAPI/Swagger spec."""
+
+
 def _url_filename(url: str) -> str:
     return url.rsplit("/", 1)[-1]
+
+
+def _validate_spec_shape(parsed: object, url: str, raw: bytes) -> None:
+    """Ensure parsed JSON looks like an OpenAPI 3.x or Swagger 2.0 document.
+
+    Raises SpecContentInvalidError otherwise. We do NOT validate the full
+    schema — only enough to catch pubhub error envelopes (e.g. a 200 OK
+    JSON `{"error": "rate-limited"}`) that would otherwise fail far away
+    inside SpecLoader.
+    """
+    snippet = raw[:200].decode("utf-8", errors="replace")
+    if not isinstance(parsed, dict):
+        raise SpecContentInvalidError(
+            f"Downloaded body from {url} parsed as JSON but is not a dict "
+            f"(got {type(parsed).__name__}). First 200 chars: {snippet!r}. "
+            f"Check whether pubhub rotated the URL."
+        )
+    if "openapi" not in parsed and "swagger" not in parsed:
+        raise SpecContentInvalidError(
+            f"Downloaded body from {url} is JSON but has no 'openapi' or "
+            f"'swagger' top-level key. First 200 chars: {snippet!r}. "
+            f"Check whether pubhub rotated the URL."
+        )
+    if "paths" not in parsed:
+        raise SpecContentInvalidError(
+            f"Downloaded body from {url} is JSON but has no 'paths' top-level "
+            f"key. First 200 chars: {snippet!r}. "
+            f"Check whether pubhub rotated the URL."
+        )
 
 
 async def fetch_spec(
     version: str,
     dest_dir: Path,
     *,
-    verify_ssl: bool = True,
     client: httpx.AsyncClient | None = None,
 ) -> Path:
     """Download the Catalyst Center OpenAPI spec for `version` into `dest_dir`.
 
     Returns the path of the written JSON file. Raises SpecVersionUnknownError
-    for unknown versions. Network errors propagate. No partial file is left
-    behind on failure.
+    for unknown versions, SpecContentInvalidError if pubhub returned 200 but
+    not an OpenAPI document, or propagates httpx errors. No partial file is
+    left behind on any failure.
+
+    TLS verification is always on. See module docstring.
     """
     url = KNOWN_SPEC_URLS.get(version)
     if url is None:
@@ -64,7 +108,10 @@ async def fetch_spec(
 
     owns_client = client is None
     if client is None:
-        client = httpx.AsyncClient(verify=verify_ssl, timeout=120.0)
+        # verify=True always — pubhub is a public CDN, MITM risk doesn't
+        # depend on Catalyst Center's cert trust.
+        # follow_redirects=True — pubhub may serve via CDN with 302s.
+        client = httpx.AsyncClient(verify=True, timeout=120.0, follow_redirects=True)
 
     try:
         print(f"[fetcher] Downloading {url}", file=sys.stderr)
@@ -72,11 +119,13 @@ async def fetch_spec(
             response = await client.get(url)
             response.raise_for_status()
             tmp.write_bytes(response.content)
-            # Validate JSON before declaring success.
-            json.loads(tmp.read_bytes())
-        except (httpx.HTTPError, json.JSONDecodeError):
-            if tmp.exists():
-                tmp.unlink()
+            parsed = json.loads(tmp.read_bytes())
+            _validate_spec_shape(parsed, url, response.content)
+        except Exception:
+            # Any failure (HTTP, JSON parse, shape, OSError) → wipe temp file.
+            # missing_ok + suppressed OSError so cleanup never masks the real error.
+            with contextlib.suppress(OSError):
+                tmp.unlink(missing_ok=True)
             raise
         tmp.rename(final)
         print(f"[fetcher] Wrote {final} ({final.stat().st_size} bytes)", file=sys.stderr)
