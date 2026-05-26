@@ -61,14 +61,24 @@ jobs:
               -f state=closed >/dev/null
           fi
 
-          # Open the next-patch milestone if it doesn't already exist (in any state).
-          EXISTING_NUM="$(gh api "repos/${GH_REPO}/milestones?state=all&per_page=100" \
-            --jq ".[] | select(.title == \"${NEXT}\") | .number" | head -n1)"
+          # Look up the next-patch milestone in any state. If it exists and is
+          # closed, reopen it (so follow-up PRs have an open milestone to land in);
+          # if open, skip; if missing, create.
+          NEXT_ANY="$(gh api "repos/${GH_REPO}/milestones?state=all&per_page=100" \
+            --jq ".[] | select(.title == \"${NEXT}\") | {number, state}" | head -n1)"
 
-          if [ -n "${EXISTING_NUM:-}" ]; then
-            echo "Milestone ${NEXT} already exists (#${EXISTING_NUM}); skipping create."
-          else
+          if [ -z "${NEXT_ANY}" ]; then
             echo "Creating milestone ${NEXT}"
             gh api -X POST "repos/${GH_REPO}/milestones" \
-              -f title="${NEXT}" >/dev/null
+              -f title="${NEXT}" \
+              -f state="open" \
+              -f description="Auto-created by milestone-rollover after the ${CURRENT} tag push." \
+              >/dev/null
+          elif echo "${NEXT_ANY}" | grep -q '"state":"closed"'; then
+            NEXT_NUM="$(echo "${NEXT_ANY}" | jq -r '.number')"
+            echo "Reopening previously-closed milestone ${NEXT} (#${NEXT_NUM})"
+            gh api -X PATCH "repos/${GH_REPO}/milestones/${NEXT_NUM}" \
+              -f state=open >/dev/null
+          else
+            echo "Milestone ${NEXT} already exists and is open; skipping."
           fi
