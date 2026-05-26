@@ -23,7 +23,7 @@ from starlette.middleware import Middleware
 
 from . import __version__
 from .auth import CatalystCenterAuth
-from .config import AppConfig, load_config
+from .config import DEFAULT_CONFIG_PATH, AppConfig, load_config, resolve_config_path
 from .diff import diff_versions, print_diff
 from .dispatcher import Dispatcher
 from .fetcher import (
@@ -46,12 +46,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "FastMCP server for Cisco Catalyst Center, dynamically generated from the OpenAPI spec."
         ),
     )
-    parser.add_argument("--config", default="config.yaml", help="path to config.yaml")
+    parser.add_argument(
+        "--config",
+        default=None,
+        help=f"path to the config file (default: ./{DEFAULT_CONFIG_PATH})",
+    )
     parser.add_argument(
         "--transport",
         choices=sorted(_VALID_TRANSPORTS),
         default=None,
-        help="override transport.mode from config.yaml",
+        help="override transport.mode from the config file",
     )
     parser.add_argument("--host", default=None, help="override transport.host")
     parser.add_argument("--port", type=int, default=None, help="override transport.port")
@@ -129,7 +133,7 @@ async def _maybe_auto_fetch(
             print(
                 f"[server] WARNING: auto_fetch is disabled and "
                 f"{version_dir}/ has no JSON files. Either set "
-                f"auto_fetch: true in config.yaml, or download the spec "
+                f"auto_fetch: true in catalyst-center-mcp.yaml, or download the spec "
                 f"manually from Cisco DevNet to that directory.",
                 file=sys.stderr,
             )
@@ -145,7 +149,7 @@ async def _maybe_auto_fetch(
     except (SpecVersionUnknownError, SpecContentInvalidError, httpx.HTTPError) as exc:
         raise RuntimeError(
             f"[startup] auto-fetch failed for version {version}: {exc}. "
-            f"Set auto_fetch: false in config.yaml and place the spec "
+            f"Set auto_fetch: false in catalyst-center-mcp.yaml and place the spec "
             f"manually under {version_dir}/, or fix the upstream issue."
         ) from exc
 
@@ -250,9 +254,15 @@ def build_and_run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    explicit = args.config is not None
+    config_path, _used_legacy = resolve_config_path(
+        args.config or DEFAULT_CONFIG_PATH,
+        explicit=explicit,
+    )
+    args.config = config_path
 
     if args.diff:
-        config = _load_config_or_default(args.config)
+        config = _load_config_or_default(config_path)
         old, new = args.diff
         return run_diff(config.catalyst_center_mcp.specs_dir, old, new)
 
