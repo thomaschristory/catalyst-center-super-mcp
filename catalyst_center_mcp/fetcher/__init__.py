@@ -157,6 +157,12 @@ def list_known_versions(specs_dir: Path) -> list[VersionInfo]:
     A version is "cached" if ``specs_dir/<version>/`` contains >=1
     ``*.{yaml,yml,json}`` file. Empty directories are skipped.
     """
+    if not specs_dir.is_dir():
+        print(
+            f"[fetcher] WARNING: specs_dir '{specs_dir}' does not exist; "
+            f"showing only hardcoded versions as uncached.",
+            file=sys.stderr,
+        )
     known = set(KNOWN_SPEC_URLS)
     seen: set[str] = set()
     out: list[VersionInfo] = []
