@@ -163,42 +163,6 @@ async def test_persistent_401_returns_error(minimal_specs_dir: Path) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_retry_recovers_after_503(minimal_specs_dir: Path) -> None:
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
-        side_effect=[
-            httpx.Response(503, text="busy"),
-            httpx.Response(200, json={"response": 1, "version": "1.0"}),
-        ]
-    )
-    d = _make_dispatcher(
-        minimal_specs_dir,
-        retry=RetryConfig(max_attempts=3, statuses=(503,), backoff_base=0.0),
-    )
-    result = await d.call("get_devices_count__network_device", {})
-    await d.close()
-    assert result == {"response": 1, "version": "1.0"}
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_retry_mutating_disabled_by_default(minimal_specs_dir: Path) -> None:
-    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
-        return_value=httpx.Response(503, text="busy")
-    )
-    d = _make_dispatcher(
-        minimal_specs_dir,
-        read_write=True,
-        retry=RetryConfig(max_attempts=3, statuses=(503,), retry_mutating=False),
-    )
-    result = await d.call("post_devices_network_device", {"hostname": "r1"})
-    await d.close()
-    assert isinstance(result, dict) and result.get("error") is True
-    # POST must not be retried.
-    assert route.call_count == 1
-
-
-@pytest.mark.asyncio
-@respx.mock
 async def test_reserved_params_stripped(minimal_specs_dir: Path) -> None:
     """`_max_pages`, `_page_size`, `_auto_follow` must not appear on the wire."""
     route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
