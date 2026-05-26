@@ -103,8 +103,7 @@ def test_fetch_specs_dir_flag_overrides_config(tmp_path: Path) -> None:
     flag_specs = tmp_path / "from_flag"
     cfg = tmp_path / "catalyst-center-mcp.yaml"
     cfg.write_text(
-        f"catalyst_center:\n  host: localhost\n"
-        f"catalyst_center_mcp:\n  specs_dir: {config_specs}\n"
+        f"catalyst_center:\n  host: localhost\ncatalyst_center_mcp:\n  specs_dir: {config_specs}\n"
     )
     v = "2.3.7.9"
     body = b'{"openapi":"3.0.0","paths":{},"info":{"title":"x","version":"1"}}'
