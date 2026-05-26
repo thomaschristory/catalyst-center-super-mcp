@@ -38,6 +38,8 @@ nav:
       - Data flow: architecture/data-flow.md
   - Guides:
       - Tool splitting: guides/tool-splitting.md
+  - Contributing:
+      - Release process: contributing/release-process.md
 
 markdown_extensions:
   - admonition
