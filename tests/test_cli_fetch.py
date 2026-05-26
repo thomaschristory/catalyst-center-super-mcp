@@ -71,3 +71,57 @@ def test_fetch_version_and_all_known_mutually_exclusive(
     cfg = _minimal_config_yaml(tmp_path)
     with pytest.raises(SystemExit):
         run_fetch(["2.3.7.9", "--all-known", "--config", str(cfg)])
+
+
+@respx.mock
+def test_fetch_all_known_continues_after_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When one version fails mid-loop, --all-known still attempts the rest."""
+    versions = list(KNOWN_SPEC_URLS)
+    assert len(versions) >= 2, "test assumes 2+ known versions"
+    body = b'{"openapi":"3.0.0","paths":{},"info":{"title":"x","version":"1"}}'
+    # First succeeds, second fails, any others succeed.
+    respx.get(KNOWN_SPEC_URLS[versions[0]]).mock(return_value=httpx.Response(200, content=body))
+    respx.get(KNOWN_SPEC_URLS[versions[1]]).mock(return_value=httpx.Response(503))
+    for v in versions[2:]:
+        respx.get(KNOWN_SPEC_URLS[v]).mock(return_value=httpx.Response(200, content=body))
+    cfg = _minimal_config_yaml(tmp_path)
+    rc = run_fetch(["--all-known", "--config", str(cfg)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert f"OK  {versions[0]}" in err
+    assert f"FAIL {versions[1]}" in err
+    # First version's spec landed on disk despite later failure.
+    assert any((tmp_path / "specs" / versions[0]).glob("*.json"))
+
+
+@respx.mock
+def test_fetch_specs_dir_flag_overrides_config(tmp_path: Path) -> None:
+    """The --specs-dir flag wins over config.catalyst_center_mcp.specs_dir."""
+    config_specs = tmp_path / "from_config"
+    flag_specs = tmp_path / "from_flag"
+    cfg = tmp_path / "catalyst-center-mcp.yaml"
+    cfg.write_text(
+        f"catalyst_center:\n  host: localhost\n"
+        f"catalyst_center_mcp:\n  specs_dir: {config_specs}\n"
+    )
+    v = "2.3.7.9"
+    body = b'{"openapi":"3.0.0","paths":{},"info":{"title":"x","version":"1"}}'
+    respx.get(KNOWN_SPEC_URLS[v]).mock(return_value=httpx.Response(200, content=body))
+    rc = run_fetch([v, "--config", str(cfg), "--specs-dir", str(flag_specs)])
+    assert rc == 0
+    assert any((flag_specs / v).glob("*.json"))
+    assert not config_specs.exists()
+
+
+def test_fetch_explicit_config_typo_errors_out(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """If --config points at a missing file, exit non-zero with a clear message
+    rather than silently falling back to defaults."""
+    with pytest.raises(SystemExit) as exc:
+        run_fetch(["2.3.7.9", "--config", str(tmp_path / "nope.yaml")])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "not found" in err

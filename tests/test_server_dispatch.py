@@ -64,3 +64,12 @@ def test_main_does_not_dispatch_diff_to_subcommand(
     )
     rc = server.main(["--diff", "2.3.7.9", "3.1.3"])
     assert rc == 0
+
+
+def test_main_propagates_subcommand_return_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    """server.main() must return the subcommand's return code unchanged."""
+    monkeypatch.setattr(
+        "catalyst_center_mcp.cli.fetch.run_fetch",
+        lambda _argv: 7,
+    )
+    assert server.main(["fetch", "x"]) == 7
