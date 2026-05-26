@@ -121,20 +121,36 @@ def test_loader_splitter_threshold_zero_disables_splitting(tmp_path: Path) -> No
 
 
 def test_loader_splitter_creates_misc_for_small_subtags(tmp_path: Path) -> None:
-    """Sub-tags with <4 ops collapse into <section>_misc."""
+    """Demonstrates two collapse points:
+    - sub-tag with <4 ops collapses into <section>_misc at the section level
+    - path-split discriminators with >=4 ops survive as <section>_<subtag>_<disc> tools
+    """
     spec_dir = tmp_path / "specs" / "1.0"
     spec_dir.mkdir(parents=True)
-    paths = {}
-    # Large sub-tag triggers per-subtag split (threshold=10).
-    for i in range(15):
-        paths[f"/api/big/{i}"] = {
-            "get": {"tags": ["Section - Big"], "operationId": f"big{i}", "parameters": []}
-        }
-    # Small sub-tag (3 ops) should collapse into <section>_misc.
+    paths: dict[str, dict] = {}
+
+    # 'Big' sub-tag: 15 ops across 3 depth-3 buckets (5 each) — exceeds threshold 10
+    # so the splitter recurses to path depth 3 and emits one tool per discriminator.
+    for discriminator in ("cats", "dogs", "birds"):
+        for i in range(5):
+            paths[f"/api/big/{discriminator}/{i}"] = {
+                "get": {
+                    "tags": ["Section - Big"],
+                    "operationId": f"big_{discriminator}_{i}",
+                    "parameters": [],
+                }
+            }
+
+    # 'Tiny' sub-tag: 3 ops < MISC_BUCKET_THRESHOLD (4) — collapses to <section>_misc.
     for i in range(3):
         paths[f"/api/tiny/{i}"] = {
-            "get": {"tags": ["Section - Tiny"], "operationId": f"tiny{i}", "parameters": []}
+            "get": {
+                "tags": ["Section - Tiny"],
+                "operationId": f"tiny{i}",
+                "parameters": [],
+            }
         }
+
     (spec_dir / "x.json").write_text(
         json.dumps({"openapi": "3.0.0", "paths": paths, "components": {"schemas": {}}})
     )
@@ -142,11 +158,10 @@ def test_loader_splitter_creates_misc_for_small_subtags(tmp_path: Path) -> None:
         str(tmp_path / "specs"), "1.0", read_write=False, max_actions_per_tool=10
     ).load()
     names = sorted(g.name for g in index.groups)
-    assert "section_misc" in names
-    # 'big' sub-tag (15 ops) needs further splitting because it exceeds threshold 10 —
-    # so the splitter recurses on URL path segments at depth 3. Verify the section_big
-    # tool ends up split (depth-3 buckets), not present as a single oversize tool.
-    big_tools = [
-        n for n in names if n.startswith("section") and "tiny" not in n and "misc" not in n
-    ]
-    assert big_tools, "expected at least one section_big_* tool"
+
+    # Small sub-tag should collapse to <section>_misc.
+    assert "section_misc" in names, names
+
+    # Big sub-tag should have been path-split into per-discriminator tools.
+    big_tools = sorted(n for n in names if n.startswith("section_big_") and not n.endswith("_misc"))
+    assert big_tools == ["section_big_birds", "section_big_cats", "section_big_dogs"], big_tools
