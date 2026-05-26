@@ -47,7 +47,7 @@ Upgrading to a new Catalyst Center version = drop a new spec folder + change one
 
 ### Supported Catalyst Center versions
 
-**2.3.7.9 and 3.1.3.** The repo ships specs for both versions; 3.1.3 is the default.
+**2.3.7.9 and 3.1.3.** The repo ships specs for both versions; **2.3.7.9 is the default** because it matches the always-on DevNet sandbox (`sandboxdnac.cisco.com`, which runs 2.3.7.10 — a patch release in the 2.3.7.x family). 3.1.3 is a superset (143 paths added, 2 removed) and is safe to switch to by editing `catalyst_center_mcp.active_version` in `config.yaml`. See [docs/superpowers/findings/2026-05-25-spec-diff.md](docs/superpowers/findings/2026-05-25-spec-diff.md) for the full diff.
 
 ### Adaptive tool splitting
 
@@ -103,7 +103,7 @@ Subsequent requests:
   X-Auth-Token: {token}
 ```
 
-Token is refreshed proactively when within 2 minutes of expiry.
+Token refresh is **reactive only**: on a 401 the dispatcher re-runs the login flow and retries the original request once. The JWT carries an `exp` claim (TTL exactly 3600s on the sandbox), but v0.1.0 ignores it — a proactive refresh path can be added later without changing the public surface.
 
 No cookie jar, no dual-mode — a single flow applies to all supported versions.
 
@@ -132,8 +132,8 @@ catalyst-center-super-mcp/
     architecture/{overview,data-flow}.md
     contributing/{development,release-process}.md
   specs/                      OpenAPI documents, one folder per version
-    2.3.7.9/                  ← bundled
-    3.1.3/                    ← bundled (default; matches DevNet sandbox)
+    2.3.7.9/                  ← bundled (default; matches DevNet sandbox running 2.3.7.10)
+    3.1.3/                    ← bundled (latest GA)
   .github/
     workflows/{lint,test,docs,docker,release}.yml
     ISSUE_TEMPLATE/{bug,feature}.yml
@@ -169,7 +169,7 @@ catalyst_center:
 
 catalyst_center_mcp:
   specs_dir: ./specs
-  active_version: "3.1.3"
+  active_version: "2.3.7.9"
   max_actions_per_tool: 80          # default; 0 disables splitting (see docs/guides/tool-splitting.md)
   pagination:
     enabled: true                   # master switch for auto-follow
