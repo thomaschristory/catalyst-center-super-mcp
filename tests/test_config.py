@@ -192,13 +192,22 @@ def test_resolve_returns_new_name_when_explicit(tmp_path: Path) -> None:
     assert used_legacy is False
 
 
-def test_resolve_prefers_new_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_prefers_new_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / DEFAULT_CONFIG_PATH).write_text("catalyst_center:\n  host: x\n")
     (tmp_path / "config.yaml").write_text("catalyst_center:\n  host: y\n")
     resolved, used_legacy = resolve_config_path(DEFAULT_CONFIG_PATH, explicit=False)
     assert resolved == DEFAULT_CONFIG_PATH
     assert used_legacy is False
+    captured = capsys.readouterr()
+    assert "NOTE" in captured.err
+    assert "both" in captured.err
+    assert DEFAULT_CONFIG_PATH in captured.err
+    assert "config.yaml" in captured.err
 
 
 def test_resolve_falls_back_to_legacy_with_warning(

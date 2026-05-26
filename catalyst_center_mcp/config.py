@@ -37,6 +37,16 @@ def resolve_config_path(path: str, *, explicit: bool) -> tuple[str, bool]:
     if explicit:
         return path, False
     if Path(path).exists():
+        if path == DEFAULT_CONFIG_PATH and Path(_LEGACY_CONFIG_PATH).exists():
+            # Both files coexist — pick the new one but flag the ambiguity so
+            # the user knows which is being used and how to silence the notice.
+            print(
+                f"[config] NOTE: both '{DEFAULT_CONFIG_PATH}' and "
+                f"'{_LEGACY_CONFIG_PATH}' are present;\n"
+                f"using '{DEFAULT_CONFIG_PATH}'. Delete '{_LEGACY_CONFIG_PATH}' "
+                f"to silence this notice.",
+                file=sys.stderr,
+            )
         return path, False
     legacy = Path(_LEGACY_CONFIG_PATH)
     if legacy.exists():
