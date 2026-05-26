@@ -23,7 +23,7 @@ import time
 import httpx
 
 
-def _decode_jwt_payload(token: str) -> dict | None:
+def _decode_jwt_payload(token: str) -> dict[str, object] | None:
     """Decode a JWT payload without signature verification.
 
     Returns None for any token that isn't a parseable three-segment JWT with a
@@ -97,7 +97,8 @@ class CatalystCenterAuth:
             raise AuthError(f"Login response missing 'Token' field. Body keys: {list(data.keys())}")
         self._token = token
         payload = _decode_jwt_payload(token)
-        self._expires_at = float(payload["exp"]) if payload and "exp" in payload else None
+        exp = payload.get("exp") if payload else None
+        self._expires_at = float(exp) if isinstance(exp, (int, float)) else None
         print(f"[auth] Catalyst Center login successful at {self._base_url}", file=sys.stderr)
 
     def header(self) -> dict[str, str]:

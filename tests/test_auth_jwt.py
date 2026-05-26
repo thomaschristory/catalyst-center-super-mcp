@@ -6,7 +6,9 @@ import base64
 import json
 import time
 
-from catalyst_center_mcp.auth import _decode_jwt_payload
+import pytest
+
+from catalyst_center_mcp.auth import CatalystCenterAuth, _decode_jwt_payload
 
 
 def _make_jwt(payload: dict) -> str:
@@ -37,11 +39,6 @@ def test_decode_garbage_segments_returns_none():
     assert _decode_jwt_payload("aaa.!!!.ccc") is None
 
 
-import pytest
-
-from catalyst_center_mcp.auth import CatalystCenterAuth
-
-
 def _auth_with_token(token: str) -> CatalystCenterAuth:
     """Construct an auth object and inject a token directly (skipping HTTP)."""
     auth = CatalystCenterAuth(
@@ -70,9 +67,9 @@ def test_expires_in_none_for_opaque():
     "exp_delta, margin, expected",
     [
         (3600, 120, False),  # plenty of time
-        (60, 120, True),     # inside margin
-        (200, 120, False),   # outside margin
-        (200, 300, True),    # margin widened past remaining
+        (60, 120, True),  # inside margin
+        (200, 120, False),  # outside margin
+        (200, 300, True),  # margin widened past remaining
     ],
 )
 def test_needs_refresh(exp_delta, margin, expected):
