@@ -1,4 +1,4 @@
-"""Loads catalyst-center-mcp config.yaml and resolves ${ENV_VAR} interpolation."""
+"""Loads catalyst-center-mcp.yaml (or legacy config.yaml) and resolves ${ENV_VAR} interpolation."""
 
 from __future__ import annotations
 
