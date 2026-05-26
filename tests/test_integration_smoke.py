@@ -55,12 +55,14 @@ async def test_end_to_end_against_mocked_sandbox(minimal_specs_dir: Path) -> Non
     n_tools = register_tools(mcp, index, dispatcher)
     assert n_tools >= 2  # at least Devices + Sites + Clients
 
-    # Unpaginated call (count endpoint → action name "get_devices_count")
-    count = await dispatcher.call("get_devices_count", {})
+    # Unpaginated call (count endpoint → action name disambiguated by path).
+    count = await dispatcher.call("get_devices_count__network_device", {})
     assert isinstance(count, dict) and count["response"] == 7
 
     # Paginated call — auto-follow stitches two pages.
-    devices = await dispatcher.call("get_devices_network_device", {"limit": 2})
+    devices = await dispatcher.call(
+        "get_devices_network_device__dna_intent_api_v1_network_device", {"limit": 2}
+    )
     assert isinstance(devices, dict)
     assert devices["response"] == [{"id": "d1"}, {"id": "d2"}, {"id": "d3"}]
     assert devices["_paginated"]["pages"] == 2
