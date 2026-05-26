@@ -340,3 +340,45 @@ async def test_exception_exhaustion_returns_error_envelope(
     assert result.get("error") is True
     assert "Request failed" in result.get("message", "")
     assert route.call_count == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc_factory",
+    [
+        lambda: httpx.ConnectError("connect"),
+        lambda: httpx.ConnectTimeout("connect timeout"),
+        lambda: httpx.ReadTimeout("read timeout"),
+        lambda: httpx.WriteTimeout("write timeout"),
+        lambda: httpx.RemoteProtocolError("protocol"),
+        lambda: httpx.PoolTimeout("pool"),
+    ],
+    ids=[
+        "ConnectError",
+        "ConnectTimeout",
+        "ReadTimeout",
+        "WriteTimeout",
+        "RemoteProtocolError",
+        "PoolTimeout",
+    ],
+)
+@respx.mock
+async def test_request_error_subclasses_are_retried_on_get(
+    minimal_specs_dir: Path,
+    _instant_sleep: None,
+    exc_factory,
+) -> None:
+    """Every httpx.RequestError subclass is treated as transient on GET."""
+    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+        side_effect=[
+            exc_factory(),
+            httpx.Response(200, json={"response": 9, "version": "1.0"}),
+        ]
+    )
+    d = _make_dispatcher(
+        minimal_specs_dir,
+        retry=RetryConfig(max_attempts=2, statuses=(503,), backoff_base=0.0),
+    )
+    result = await d.call("get_devices_count__network_device", {})
+    await d.close()
+    assert result == {"response": 9, "version": "1.0"}
