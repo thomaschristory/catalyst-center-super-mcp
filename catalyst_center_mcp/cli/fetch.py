@@ -9,12 +9,7 @@ from pathlib import Path
 
 import httpx
 
-from catalyst_center_mcp.config import (
-    DEFAULT_CONFIG_PATH,
-    AppConfig,
-    load_config,
-    resolve_config_path,
-)
+from catalyst_center_mcp.cli._common import add_config_args, load_config_or_default
 from catalyst_center_mcp.fetcher import (
     KNOWN_SPEC_URLS,
     SpecContentInvalidError,
@@ -40,33 +35,15 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=f"fetch every version in KNOWN_SPEC_URLS ({len(KNOWN_SPEC_URLS)} known).",
     )
-    parser.add_argument(
-        "--config",
-        default=None,
-        help=f"path to the config file (default: ./{DEFAULT_CONFIG_PATH})",
-    )
-    parser.add_argument(
-        "--specs-dir",
-        default=None,
-        help="override catalyst_center_mcp.specs_dir from the config file",
-    )
+    add_config_args(parser)
     return parser
-
-
-def _load_config_or_default(config_arg: str | None) -> AppConfig:
-    explicit = config_arg is not None
-    resolved, _ = resolve_config_path(config_arg or DEFAULT_CONFIG_PATH, explicit=explicit)
-    try:
-        return load_config(resolved)
-    except FileNotFoundError:
-        return AppConfig()
 
 
 def run_fetch(argv: list[str]) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    config = _load_config_or_default(args.config)
+    config = load_config_or_default(args.config)
     specs_dir = Path(args.specs_dir or config.catalyst_center_mcp.specs_dir)
 
     versions: list[str] = list(KNOWN_SPEC_URLS) if args.all_known else [args.version]
