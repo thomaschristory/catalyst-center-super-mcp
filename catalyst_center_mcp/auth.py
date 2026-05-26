@@ -64,6 +64,7 @@ class CatalystCenterAuth:
         self._password = password
         self._verify_ssl = verify_ssl
         self._token: str = ""
+        self._expires_at: float | None = None
 
     async def login(self, client: httpx.AsyncClient) -> None:
         """POST /dna/system/api/v1/auth/token with HTTP Basic, store the JWT."""
@@ -95,6 +96,8 @@ class CatalystCenterAuth:
         if not isinstance(token, str) or not token:
             raise AuthError(f"Login response missing 'Token' field. Body keys: {list(data.keys())}")
         self._token = token
+        payload = _decode_jwt_payload(token)
+        self._expires_at = float(payload["exp"]) if payload and "exp" in payload else None
         print(f"[auth] Catalyst Center login successful at {self._base_url}", file=sys.stderr)
 
     def header(self) -> dict[str, str]:
@@ -102,3 +105,14 @@ class CatalystCenterAuth:
         if not self._token:
             raise AuthError("Not authenticated — call login() first")
         return {"X-Auth-Token": self._token}
+
+    def expires_in(self) -> float | None:
+        """Seconds until the JWT expires, or None for opaque/missing tokens."""
+        if self._expires_at is None:
+            return None
+        return self._expires_at - time.time()
+
+    def needs_refresh(self, margin_seconds: int = 120) -> bool:
+        """True iff the token expires within `margin_seconds`. Opaque tokens → False."""
+        remaining = self.expires_in()
+        return remaining is not None and remaining <= margin_seconds
