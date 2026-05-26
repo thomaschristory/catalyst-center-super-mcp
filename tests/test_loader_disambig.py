@@ -48,10 +48,8 @@ def test_v01_unique_names_preserved():
         if any(f"{name}_{i}" in snap_set for i in range(2, 50)):
             return False
         m = _N_SUFFIX.match(name)
-        if m and m.group(1) in snap_set:
-            # name is itself a _N variant of another snapshot entry → was a collision.
-            return False
-        return True
+        # If name is itself a _N variant of another snapshot entry → was a collision.
+        return not (m and m.group(1) in snap_set)
 
     unique_in_v01 = {n for n in snap_set if was_unique(n)}
     missing = unique_in_v01 - new
