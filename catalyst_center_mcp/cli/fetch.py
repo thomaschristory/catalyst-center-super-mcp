@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -49,18 +50,31 @@ def run_fetch(argv: list[str]) -> int:
     versions: list[str] = list(KNOWN_SPEC_URLS) if args.all_known else [args.version]
 
     async def _runner() -> int:
-        rc = 0
+        succeeded: list[str] = []
+        failed: list[str] = []
         for v in versions:
             try:
                 target = await fetch_spec(v, specs_dir / v)
                 print(f"[fetch] OK  {v} -> {target}", file=sys.stderr)
+                succeeded.append(v)
             except (
                 SpecVersionUnknownError,
                 SpecContentInvalidError,
                 httpx.HTTPError,
+                json.JSONDecodeError,
+                OSError,
             ) as exc:
-                print(f"[fetch] FAIL {v}: {exc}", file=sys.stderr)
-                rc = 1
-        return rc
+                print(
+                    f"[fetch] FAIL {v} ({type(exc).__name__}): {exc}",
+                    file=sys.stderr,
+                )
+                failed.append(v)
+        if len(versions) > 1:
+            print(
+                f"[fetch] {len(succeeded)}/{len(versions)} succeeded"
+                + (f", failed: {', '.join(failed)}" if failed else ""),
+                file=sys.stderr,
+            )
+        return 1 if failed else 0
 
     return asyncio.run(_runner())
