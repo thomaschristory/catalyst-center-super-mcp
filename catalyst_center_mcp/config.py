@@ -97,11 +97,13 @@ _ENV_RE = re.compile(r"\$\{([^}]+)\}")
 
 
 def _interpolate(value: str) -> str:
+    """Substitute ${VAR} from os.environ; missing → empty string + stderr WARNING (stdout would corrupt stdio MCP JSON-RPC stream)."""
+
     def replacer(match: re.Match[str]) -> str:
         var_name = match.group(1)
         result = os.environ.get(var_name, "")
         if not result:
-            print(f"[config] WARNING: env var '{var_name}' is not set")
+            print(f"[config] WARNING: env var '{var_name}' is not set", file=sys.stderr)
         return result
 
     return _ENV_RE.sub(replacer, value)

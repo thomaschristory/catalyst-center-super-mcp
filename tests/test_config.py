@@ -106,12 +106,19 @@ def test_missing_file_raises(tmp_path: Path) -> None:
         load_config(str(tmp_path / "nope.yaml"))
 
 
-def test_missing_env_var_substitutes_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_env_var_substitutes_empty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.delenv("DOES_NOT_EXIST", raising=False)
     path = tmp_path / "config.yaml"
     path.write_text("catalyst_center:\n  host: localhost\n  username: ${DOES_NOT_EXIST}\n")
     cfg = load_config(str(path))
     assert cfg.catalyst_center.username == ""
+    captured = capsys.readouterr()
+    assert "DOES_NOT_EXIST" in captured.err
+    assert "WARNING" in captured.err
 
 
 def test_bearer_requires_token(tmp_path: Path) -> None:
