@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 from typing import Literal, cast
 
+import httpx
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from starlette.middleware import Middleware
@@ -25,7 +26,11 @@ from .auth import CatalystCenterAuth
 from .config import AppConfig, load_config
 from .diff import diff_versions, print_diff
 from .dispatcher import Dispatcher
-from .fetcher import fetch_spec
+from .fetcher import (
+    SpecContentInvalidError,
+    SpecVersionUnknownError,
+    fetch_spec,
+)
 from .loader import SpecLoader
 from .tools import register_tools
 from .transport_auth import BearerAuthMiddleware, decide_bind
@@ -106,23 +111,43 @@ async def _maybe_auto_fetch(
     auto_fetch: bool,
     specs_dir: Path,
     version: str,
-    verify_ssl: bool,
 ) -> None:
     """Download the spec for `version` into `specs_dir/<version>/` if needed.
 
     Skips when `auto_fetch` is false or when the version directory already
-    contains at least one `*.json` file.
+    contains at least one `*.json` file. When auto_fetch is disabled and
+    the dir is empty, emits a stderr warning pointing at the knob.
+
+    Fetch failures (unknown version, invalid content, network) are wrapped
+    in a RuntimeError with an actionable `[startup]` prefix so users get a
+    clean error rather than a stack trace.
     """
-    if not auto_fetch:
-        return
     version_dir = specs_dir / version
-    if version_dir.exists() and any(version_dir.glob("*.json")):
+    has_specs = version_dir.exists() and any(version_dir.glob("*.json"))
+    if not auto_fetch:
+        if not has_specs:
+            print(
+                f"[server] WARNING: auto_fetch is disabled and "
+                f"{version_dir}/ has no JSON files. Either set "
+                f"auto_fetch: true in config.yaml, or download the spec "
+                f"manually from Cisco DevNet to that directory.",
+                file=sys.stderr,
+            )
+        return
+    if has_specs:
         return
     print(
         f"[server] auto_fetch enabled — downloading spec for {version}",
         file=sys.stderr,
     )
-    await fetch_spec(version, version_dir, verify_ssl=verify_ssl)
+    try:
+        await fetch_spec(version, version_dir)
+    except (SpecVersionUnknownError, SpecContentInvalidError, httpx.HTTPError) as exc:
+        raise RuntimeError(
+            f"[startup] auto-fetch failed for version {version}: {exc}. "
+            f"Set auto_fetch: false in config.yaml and place the spec "
+            f"manually under {version_dir}/, or fix the upstream issue."
+        ) from exc
 
 
 async def _connect_and_register(
@@ -172,7 +197,6 @@ async def _connect_and_register(
         auto_fetch=config.catalyst_center_mcp.auto_fetch,
         specs_dir=Path(config.catalyst_center_mcp.specs_dir),
         version=version,
-        verify_ssl=config.catalyst_center.verify_ssl,
     )
 
     index = SpecLoader(
