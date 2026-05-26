@@ -33,3 +33,6 @@ Thumbs.db
 
 # Claude Code agent state — per-clone, not source-of-truth
 .claude/
+
+# Superpowers scratch — designs, plans, findings, prompts. Never tracked.
+docs/superpowers/
