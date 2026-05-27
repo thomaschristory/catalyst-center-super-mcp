@@ -16,6 +16,9 @@ Tracking PRs land against the [v0.3.0 milestone](https://github.com/thomaschrist
   slated for removal in v0.4.0. To migrate: `mv config.yaml catalyst-center-mcp.yaml`.
   (PR #12)
 
+### Documentation
+- PyPI Trusted Publisher setup documented in `docs/contributing/release-process.md`. The `v0.3.0` tag push is the first live exercise. (PR E)
+
 ## [0.2.0] — 2026-05-26
 
 Hardening release. Resolves the v0.1.0 deferred items that materially affect
