@@ -5,6 +5,17 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v0.3.0 (in progress)
+
+Tracking PRs land against the [v0.3.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/2).
+
+### Changed (behavior — read this if you upgrade)
+- The default config filename is now `catalyst-center-mcp.yaml` (was `config.yaml`).
+  The server still loads `config.yaml` with a stderr DEPRECATION warning if the
+  new name is absent and `--config` was not explicit. The legacy fallback is
+  slated for removal in v0.4.0. To migrate: `mv config.yaml catalyst-center-mcp.yaml`.
+  (PR #12)
+
 ## [0.2.0] — 2026-05-26
 
 Hardening release. Resolves the v0.1.0 deferred items that materially affect

@@ -7,10 +7,7 @@ Sibling project to [`catalyst-sdwan-super-mcp`](https://github.com/thomaschristo
 
 ## Status
 
-**v0.1.0 — scaffold only.** Auth, loader, dispatcher, and tool registration
-modules are stubs (`NotImplementedError`). See
-`docs/superpowers/specs/2026-05-25-catalyst-center-bootstrap-design.md`
-for what's intentionally deferred and why.
+See [`CHANGELOG.md`](CHANGELOG.md) for the current release and what changed.
 
 ## Install (once published)
 
@@ -21,8 +18,8 @@ uv tool install catalyst-center-super-mcp
 ## Configure
 
 Copy `.env.example` to `.env` and fill in your Catalyst Center credentials.
-See `config.yaml` for runtime knobs (transport, splitting cap, retries,
-pagination).
+See `catalyst-center-mcp.yaml` for runtime knobs (transport, splitting cap,
+retries, pagination).
 
 ## Run
 

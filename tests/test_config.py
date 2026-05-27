@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from catalyst_center_mcp.config import (  # noqa: F401  (verify all public symbols are exported)
+    DEFAULT_CONFIG_PATH,
     AppConfig,
     CatalystCenterConfig,
     CatalystCenterMcpConfig,
@@ -15,6 +16,7 @@ from catalyst_center_mcp.config import (  # noqa: F401  (verify all public symbo
     TransportAuthConfig,
     TransportConfig,
     load_config,
+    resolve_config_path,
 )
 
 VALID_YAML = """\
@@ -175,3 +177,61 @@ def test_dataclasses_are_independent_instances() -> None:
     b = AppConfig()
     a.catalyst_center.retries.statuses = (599,)
     assert b.catalyst_center.retries.statuses == (502, 503, 504)
+
+
+def test_default_config_path_constant() -> None:
+    assert DEFAULT_CONFIG_PATH == "catalyst-center-mcp.yaml"
+
+
+def test_resolve_returns_new_name_when_explicit(tmp_path: Path) -> None:
+    explicit = tmp_path / "custom.yaml"
+    explicit.write_text("catalyst_center:\n  host: x\n")
+    # explicit=True simulates the user passing --config.
+    resolved, used_legacy = resolve_config_path(str(explicit), explicit=True)
+    assert resolved == str(explicit)
+    assert used_legacy is False
+
+
+def test_resolve_prefers_new_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / DEFAULT_CONFIG_PATH).write_text("catalyst_center:\n  host: x\n")
+    (tmp_path / "config.yaml").write_text("catalyst_center:\n  host: y\n")
+    resolved, used_legacy = resolve_config_path(DEFAULT_CONFIG_PATH, explicit=False)
+    assert resolved == DEFAULT_CONFIG_PATH
+    assert used_legacy is False
+    captured = capsys.readouterr()
+    assert "NOTE" in captured.err
+    assert "both" in captured.err
+    assert DEFAULT_CONFIG_PATH in captured.err
+    assert "config.yaml" in captured.err
+
+
+def test_resolve_falls_back_to_legacy_with_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text("catalyst_center:\n  host: x\n")
+    resolved, used_legacy = resolve_config_path(DEFAULT_CONFIG_PATH, explicit=False)
+    assert resolved == "config.yaml"
+    assert used_legacy is True
+    captured = capsys.readouterr()
+    assert "DEPRECATION" in captured.err
+    assert "catalyst-center-mcp.yaml" in captured.err
+    assert "v0.4.0" in captured.err
+
+
+def test_resolve_no_fallback_when_explicit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """If --config was passed explicitly, never fall back to the legacy name."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text("catalyst_center:\n  host: x\n")
+    # User passed an explicit but-missing path — return it unchanged so the
+    # normal FileNotFoundError flow fires downstream.
+    resolved, used_legacy = resolve_config_path("missing.yaml", explicit=True)
+    assert resolved == "missing.yaml"
+    assert used_legacy is False
