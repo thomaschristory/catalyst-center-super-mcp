@@ -36,7 +36,7 @@ from .tools import register_tools
 from .transport_auth import BearerAuthMiddleware, decide_bind
 
 _VALID_TRANSPORTS: frozenset[str] = frozenset({"stdio", "sse", "streamable-http"})
-_SUBCOMMANDS: frozenset[str] = frozenset({"fetch", "list-versions"})
+_SUBCOMMANDS: frozenset[str] = frozenset({"fetch", "list-versions", "discover-versions"})
 TransportMode = Literal["stdio", "sse", "streamable-http"]
 
 
@@ -46,6 +46,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description=(
             "FastMCP server for Cisco Catalyst Center, dynamically generated from the OpenAPI spec."
         ),
+        epilog=(
+            "Subcommands (run with --help for details):\n"
+            "  fetch              Download an OpenAPI spec for one or all known versions.\n"
+            "  list-versions      List known + on-disk versions (offline).\n"
+            "  discover-versions  [experimental] Diff DevNet vs KNOWN_SPEC_URLS.\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--config",
@@ -265,6 +272,10 @@ def main(argv: list[str] | None = None) -> int:
             from .cli.list_versions import run_list_versions
 
             return run_list_versions(rest)
+        if sub == "discover-versions":
+            from .cli.discover import run_discover_versions
+
+            return run_discover_versions(rest)
 
     args = parse_args(raw)
     explicit = args.config is not None
