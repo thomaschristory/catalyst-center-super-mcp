@@ -5,16 +5,16 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — v0.3.0 (in progress)
+## [0.3.0] — 2026-05-27
 
-Tracking PRs land against the [v0.3.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/2).
+sdwan-parity hardening. See the [v0.3.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/2) for the full PR list.
 
 ### Added
-- **`catalyst-center-mcp fetch <version>` / `--all-known`** — download specs without starting the server. (PR #13)
-- **`catalyst-center-mcp list-versions`** — enumerate known + on-disk versions offline. (PR #13)
-- **`catalyst-center-mcp discover-versions`** *(experimental)* — diff DevNet's docs page against `KNOWN_SPEC_URLS`. The live DevNet page is currently JS-only, so this command exits 2 against the real URL; the parser is forward-compatible if Cisco publishes static markup again. Helper only — does not mutate the hardcoded table. (PR #17)
-- **`milestone-rollover.yml` workflow** — closes the just-tagged milestone, opens the next-patch one. Triggers on tag push. (PR #15)
-- **Focused `tests/test_retry.py`** — jitter bounds, backoff cap, network-exception retry semantics, exhaustion outcome. (PR #14)
+- **`catalyst-center-mcp fetch <version>` / `--all-known`** — download specs without starting the server. (PR #18, originally #13)
+- **`catalyst-center-mcp list-versions`** — enumerate known + on-disk versions offline. (PR #18, originally #13)
+- **`catalyst-center-mcp discover-versions`** *(experimental)* — diff DevNet's docs page against `KNOWN_SPEC_URLS`. The live DevNet page is currently JS-only, so this command exits 2 against the real URL; the parser is forward-compatible if Cisco publishes static markup again. Helper only — does not mutate the hardcoded table. (PR #19, originally #17)
+- **`milestone-rollover.yml` workflow** — closes the just-tagged milestone, opens the next-patch one. Triggers on tag push (not `release: published`) to avoid the GITHUB_TOKEN chained-trigger block. Bundles `actions/download-artifact` v4 → v8 (resolves v0.2.0-held Dependabot bump). (PR #15)
+- **Focused `tests/test_retry.py`** — jitter bounds `[base/2, base]`, backoff cap, network-exception retry semantics (GET / POST / `retry_mutating`), mixed-mode failure, parametrized over `httpx.RequestError` subclasses, exhaustion outcome. (PR #14)
 
 ### Changed (behavior — read this if you upgrade)
 - The default config filename is now `catalyst-center-mcp.yaml` (was `config.yaml`).
@@ -24,7 +24,9 @@ Tracking PRs land against the [v0.3.0 milestone](https://github.com/thomaschrist
   (PR #12)
 
 ### Documentation
-- PyPI Trusted Publisher setup documented in `docs/contributing/release-process.md`. The `v0.3.0` tag push is the first live exercise. (PR E)
+- PyPI Trusted Publisher setup documented in `docs/contributing/release-process.md` with the exact form fields and the rename-breaks-trust gotcha. The `v0.3.0` tag push is the first live exercise. (PR #16)
+
+[0.3.0]: https://github.com/thomaschristory/catalyst-center-super-mcp/releases/tag/v0.3.0
 
 ## [0.2.0] — 2026-05-26
 
