@@ -5,12 +5,17 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — v0.3.1 (in progress)
+## [0.3.1] — 2026-05-28
 
-Tracking PRs land against the [v0.3.1 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/3).
+Two-PR patch release. See the [v0.3.1 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/3) for the full PR list.
 
 ### Changed
-- **`discover-versions`** now points at `https://developer.cisco.com/docs/catalyst-center/` (Cisco renamed DNA Center → Catalyst Center; the old URL was redirecting). Recon against the new URL: still a JS SPA for the spec filenames, so the command remains `[experimental]` and still exits with `DiscoveryError`. The spurious redirect WARNING from v0.3.0 is gone — we now hit the canonical URL directly. (#21)
+- **`discover-versions`** now points at `https://developer.cisco.com/docs/catalyst-center/` (Cisco renamed DNA Center → Catalyst Center; the old URL was redirecting). Recon against the new URL: still a JS SPA for the spec filenames, so the command remains `[experimental]` and still exits with `DiscoveryError`. The spurious redirect WARNING from v0.3.0 is gone — we now hit the canonical URL directly. (PR #25, originally #21)
+
+### CI
+- **`actions/upload-artifact` v4 → v7.0.1** in `release.yml`, aligning with `actions/download-artifact@v8` already in the same workflow. SHA-pinned. No behavioural change — the `name:` flow is wire-compatible across these majors. (PR #24, originally #23)
+
+[0.3.1]: https://github.com/thomaschristory/catalyst-center-super-mcp/releases/tag/v0.3.1
 
 ## [0.3.0] — 2026-05-27
 
