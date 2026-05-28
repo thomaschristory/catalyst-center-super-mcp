@@ -5,6 +5,13 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v0.3.1 (in progress)
+
+Tracking PRs land against the [v0.3.1 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/3).
+
+### Changed
+- **`discover-versions`** now points at `https://developer.cisco.com/docs/catalyst-center/` (Cisco renamed DNA Center → Catalyst Center; the old URL was redirecting). Recon against the new URL: still a JS SPA for the spec filenames, so the command remains `[experimental]` and still exits with `DiscoveryError`. The spurious redirect WARNING from v0.3.0 is gone — we now hit the canonical URL directly. (#21)
+
 ## [0.3.0] — 2026-05-27
 
 sdwan-parity hardening. See the [v0.3.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/2) for the full PR list.

@@ -2,7 +2,7 @@
 
 URLs are hardcoded per known version. Unknown versions raise
 SpecVersionUnknownError with an actionable message pointing the user at
-https://developer.cisco.com/docs/dna-center/ and to KNOWN_SPEC_URLS so
+https://developer.cisco.com/docs/catalyst-center/ and to KNOWN_SPEC_URLS so
 they can add a new entry.
 
 The server invokes this at startup when
@@ -99,7 +99,7 @@ async def fetch_spec(
             f"No known download URL for Catalyst Center version '{version}'. "
             f"Supported: {supported}. "
             f"To add a new version, find its download URL at "
-            f"https://developer.cisco.com/docs/dna-center/ and append it to "
+            f"https://developer.cisco.com/docs/catalyst-center/ and append it to "
             f"catalyst_center_mcp/fetcher/__init__.py:KNOWN_SPEC_URLS."
         )
 

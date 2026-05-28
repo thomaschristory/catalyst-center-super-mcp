@@ -85,7 +85,7 @@ Versions on disk under ./specs/:
 ### `discover-versions` *(experimental)*
 
 Scrape Cisco DevNet's docs landing page
-(`https://developer.cisco.com/docs/dna-center/`) for Catalyst Center spec
+(`https://developer.cisco.com/docs/catalyst-center/`) for Catalyst Center spec
 versions and print a diff vs the hardcoded `KNOWN_SPEC_URLS` table. Helper
 only — it never mutates the hardcoded table; the maintainer copies new
 entries in by hand after reviewing.

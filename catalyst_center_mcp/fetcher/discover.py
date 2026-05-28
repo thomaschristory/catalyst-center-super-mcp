@@ -1,21 +1,23 @@
 """Discover Catalyst Center spec versions by scraping DevNet's docs index.
 
-The DevNet docs page at ``https://developer.cisco.com/docs/dna-center/`` lists
-spec versions and their pubhub download URLs. We extract them via a single
-regex over the raw HTML rather than executing JS, mirroring the sdwan project's
-discover.py approach.
+The DevNet docs page at ``https://developer.cisco.com/docs/catalyst-center/``
+lists spec versions and their pubhub download URLs. We extract them via a
+single regex over the raw HTML rather than executing JS, mirroring the sdwan
+project's discover.py approach.
 
 If the page changes shape (zero matches), ``parse_discovery_html`` raises
 ``DiscoveryError`` so the failure is loud rather than silent.
 
-Known limitation (recon 2026-05-27):
+Known limitation (recon 2026-05-27, re-confirmed against the renamed
+``/docs/catalyst-center/`` URL):
     The live DevNet landing page is largely a JS SPA. The static HTML
-    typically contains only the *current* spec's slug
-    (``cisco-catalyst-center-api-<ver>``) and UUID, often without the full
-    ``intent_api_<ver>.json`` filename. In practice the regex below may
-    match zero URLs against the live page, which intentionally raises
-    ``DiscoveryError``. The maintainer should then inspect the page
-    manually and update ``KNOWN_SPEC_URLS`` in
+    surfaces only the *current* spec's slug (e.g.
+    ``cisco-catalyst-center-api-3-1-3``) but not the UUID-bearing path nor
+    the ``intent_api_<ver>.json`` filename — those are rendered client-side
+    when the user clicks into a specific API page. The regex below
+    therefore matches zero URLs against the live page today, which
+    intentionally raises ``DiscoveryError``. The maintainer should then
+    inspect the page manually and update ``KNOWN_SPEC_URLS`` in
     ``catalyst_center_mcp/fetcher/__init__.py``. The regex IS exercised by
     a synthetic-HTML test suite so the parser stays correct should DevNet
     publish a static, fully-linked index in future.
@@ -34,7 +36,7 @@ from typing import Final
 
 import httpx
 
-DEVNET_INDEX_URL: Final[str] = "https://developer.cisco.com/docs/dna-center/"
+DEVNET_INDEX_URL: Final[str] = "https://developer.cisco.com/docs/catalyst-center/"
 
 
 class DiscoveryError(RuntimeError):
