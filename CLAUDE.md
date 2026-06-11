@@ -158,6 +158,15 @@ in name order.
 
 ## Config file
 
+The YAML file is **optional** (since v0.4.0). Config resolves with precedence
+**CLI flags > `CATALYST_CENTER_*` env vars > YAML > built-in defaults**, built on
+`pydantic-settings` (`config.py`). Env vars deep-merge over YAML per-leaf. With no
+YAML on disk the server still starts from env + defaults (`host` defaults to
+`sandboxdnac.cisco.com`) — this is what makes `uv tool install` + an MCP client
+work, where the cwd is not the project dir. `.env` is discovered from the cwd
+(and next to `--config`), not the install dir. Credentials are validated *before*
+spec loading (`require_credentials` in `auth.py`).
+
 ```yaml
 # config.yaml
 catalyst_center:

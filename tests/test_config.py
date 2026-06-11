@@ -103,9 +103,9 @@ def test_defaults_applied_for_minimal_config(tmp_path: Path) -> None:
     assert cfg.transport.auth.type == "none"
 
 
-def test_missing_file_raises(tmp_path: Path) -> None:
+def test_missing_file_raises_when_required(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
-        load_config(str(tmp_path / "nope.yaml"))
+        load_config(str(tmp_path / "nope.yaml"), required=True)
 
 
 def test_missing_env_var_substitutes_empty(
@@ -121,6 +121,19 @@ def test_missing_env_var_substitutes_empty(
     captured = capsys.readouterr()
     assert "DOES_NOT_EXIST" in captured.err
     assert "WARNING" in captured.err
+
+
+def test_unset_interpolated_host_falls_back_to_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`host: ${UNSET}` must fall back to the model default, not yield "https://:443"."""
+    monkeypatch.delenv("CATALYST_CENTER_HOST", raising=False)
+    path = tmp_path / "catalyst-center-mcp.yaml"
+    path.write_text("catalyst_center:\n  host: ${CATALYST_CENTER_HOST}\n")
+    cfg = load_config(str(path))
+    assert cfg.catalyst_center.host == "sandboxdnac.cisco.com"
+    assert cfg.catalyst_center.base_url == "https://sandboxdnac.cisco.com:443"
 
 
 def test_bearer_requires_token(tmp_path: Path) -> None:
@@ -157,7 +170,9 @@ def test_bearer_soft_min_warning(tmp_path: Path, capsys: pytest.CaptureFixture[s
 def test_unknown_auth_type_rejected(tmp_path: Path) -> None:
     path = tmp_path / "config.yaml"
     path.write_text("catalyst_center:\n  host: localhost\ntransport:\n  auth:\n    type: oauth2\n")
-    with pytest.raises(ValueError, match=r"unknown transport\.auth\.type"):
+    # pydantic's Literal["none", "bearer"] rejects it at construction;
+    # ValidationError is a subclass of ValueError.
+    with pytest.raises(ValueError, match=r"none.*bearer|bearer.*none"):
         load_config(str(path))
 
 
@@ -169,6 +184,59 @@ def test_token_without_bearer_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="type=none"):
         load_config(str(path))
+
+
+def test_env_only_no_yaml_yields_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no YAML on disk, credentials come from CATALYST_CENTER_* env vars."""
+    monkeypatch.setenv("CATALYST_CENTER_USERNAME", "devnetuser")
+    monkeypatch.setenv("CATALYST_CENTER_PASSWORD", "Cisco123!")
+    cfg = load_config(str(tmp_path / "absent.yaml"))  # required defaults False
+    assert cfg.catalyst_center.username == "devnetuser"
+    assert cfg.catalyst_center.password == "Cisco123!"
+    # Host falls through to the DevNet sandbox default.
+    assert cfg.catalyst_center.host == "sandboxdnac.cisco.com"
+
+
+def test_env_overrides_yaml_but_preserves_other_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Env wins per-leaf (deep merge): host from env, port/username from YAML survive."""
+    path = tmp_path / "catalyst-center-mcp.yaml"
+    path.write_text(
+        "catalyst_center:\n  host: yaml-host.example.com\n  port: 8443\n  username: yamluser\n"
+    )
+    monkeypatch.setenv("CATALYST_CENTER_HOST", "env-host.example.com")
+    monkeypatch.setenv("CATALYST_CENTER_PASSWORD", "env-pass")
+    cfg = load_config(str(path))
+    assert cfg.catalyst_center.host == "env-host.example.com"  # env overrides leaf
+    assert cfg.catalyst_center.port == 8443  # YAML preserved
+    assert cfg.catalyst_center.username == "yamluser"  # YAML preserved
+    assert cfg.catalyst_center.password == "env-pass"  # env-only leaf
+
+
+def test_bare_section_parses_to_defaults(tmp_path: Path) -> None:
+    """A bare `catalyst_center:` line (parses to None) must not crash."""
+    path = tmp_path / "catalyst-center-mcp.yaml"
+    path.write_text("catalyst_center:\ntransport:\n")
+    cfg = load_config(str(path))
+    assert cfg.catalyst_center.host == "sandboxdnac.cisco.com"
+    assert cfg.transport.mode == "stdio"
+
+
+def test_verify_ssl_false_coerces_to_bool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CATALYST_CENTER_VERIFY_SSL=false must yield bool False, not a truthy string."""
+    monkeypatch.setenv("CATALYST_CENTER_VERIFY_SSL", "false")
+    cfg = load_config(str(tmp_path / "absent.yaml"))
+    assert cfg.catalyst_center.verify_ssl is False
+
+
+def test_absent_file_not_required_uses_defaults(tmp_path: Path) -> None:
+    cfg = load_config(str(tmp_path / "absent.yaml"))
+    assert isinstance(cfg, AppConfig)
+    assert cfg.catalyst_center.port == 443
+    assert cfg.catalyst_center_mcp.active_version == "2.3.7.9"
 
 
 def test_dataclasses_are_independent_instances() -> None:
@@ -223,7 +291,7 @@ def test_resolve_falls_back_to_legacy_with_warning(
     captured = capsys.readouterr()
     assert "DEPRECATION" in captured.err
     assert "catalyst-center-mcp.yaml" in captured.err
-    assert "v0.4.0" in captured.err
+    assert "v0.5.0" in captured.err
 
 
 def test_resolve_no_fallback_when_explicit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
