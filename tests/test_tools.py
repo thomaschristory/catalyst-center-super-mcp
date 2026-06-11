@@ -55,6 +55,35 @@ async def test_tool_description_lists_actions(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_registered_tool_schema_exposes_only_action_and_params(
+    minimal_specs_dir: Path,
+) -> None:
+    """Regression guard (issue #29; mirrors catalyst-sdwan #52/#53).
+
+    fastmcp 3.x runs a pydantic TypeAdapter over the *full* handler signature to
+    build each tool's input schema. If `_register_group_tool` ever leaked an
+    internal closure into the signature via the default-arg capture pattern,
+    this test fails two ways depending on the leaked type:
+      - an arbitrary type (e.g. `_dispatcher: Dispatcher = dispatcher`) raises
+        PydanticSchemaGenerationError inside `register_tools` below, before the
+        assert is even reached;
+      - a schematizable type (e.g. a stray `str`/`int` default arg) registers
+        fine but pollutes the schema, which the `== {action, params}` assert
+        then catches.
+    Either way the failure is loud and local, not an opaque stack trace deep in
+    fastmcp at a user's first startup."""
+    index = SpecLoader(str(minimal_specs_dir), "2.3.7.9", read_write=False).load()
+    mcp, d = _make_setup(minimal_specs_dir)
+    register_tools(mcp, index, d)
+    for group in index.groups:
+        tool = await mcp.get_tool(group.name)
+        assert set(tool.parameters["properties"]) == {"action", "params"}, (
+            f"tool {group.name!r} leaked params beyond action/params: "
+            f"{sorted(tool.parameters['properties'])}"
+        )
+
+
+@pytest.mark.asyncio
 async def test_unknown_action_returns_error_envelope(
     minimal_specs_dir: Path,
 ) -> None:

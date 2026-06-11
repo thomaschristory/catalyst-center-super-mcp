@@ -5,6 +5,18 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-06-11
+
+Preventive hardening of tool registration. See the [v0.4.1 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/6) for the full PR list.
+
+### Added
+- **Schema-shape regression test for tool registration** (#29). Asserts every registered tool's input schema exposes exactly `{action, params}`. This guards against the class of startup crash that hit the sibling `catalyst-sdwan-super-mcp` (its #52/#53): fastmcp 3.x runs a pydantic `TypeAdapter` over the whole handler signature, so a future refactor that leaked an internal closure (e.g. the `Dispatcher`) into the signature would now fail on a clear assertion instead of an opaque `PydanticSchemaGenerationError`. Our `tools.py` already uses the correct closure-factory pattern — this locks it in.
+
+### Changed
+- **Dependency floor `fastmcp>=2.0` → `fastmcp>=3.0`** (#29). We already require and run on fastmcp 3.x; tightening the floor stops a resolver from silently drifting back to untested 2.x signature-introspection behavior.
+
+[0.4.1]: https://github.com/thomaschristory/catalyst-center-super-mcp/releases/tag/v0.4.1
+
 ## [0.4.0] — 2026-06-11
 
 env/config hardening so the server runs under `uv tool install` + an MCP client. See the [v0.4.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/4) for the full PR list.
