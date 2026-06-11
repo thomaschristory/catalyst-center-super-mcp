@@ -269,7 +269,18 @@ def _interpolate(value: str) -> str:
 
 def _interpolate_dict(obj: Any) -> Any:
     if isinstance(obj, dict):
-        return {k: _interpolate_dict(v) for k, v in obj.items()}
+        # Drop leaves that interpolate to an empty string (an unset ${VAR}, or a
+        # literal "") so the env source / model defaults apply instead of an
+        # empty value silently winning — e.g. `host: ${UNSET}` must fall back to
+        # the sandbox default, not yield base_url "https://:443". The unset-var
+        # WARNING still fires inside _interpolate().
+        out: dict[str, Any] = {}
+        for k, v in obj.items():
+            iv = _interpolate_dict(v)
+            if isinstance(iv, str) and iv == "":
+                continue
+            out[k] = iv
+        return out
     if isinstance(obj, list):
         return [_interpolate_dict(i) for i in obj]
     if isinstance(obj, str):

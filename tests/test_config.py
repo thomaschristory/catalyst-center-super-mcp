@@ -123,6 +123,19 @@ def test_missing_env_var_substitutes_empty(
     assert "WARNING" in captured.err
 
 
+def test_unset_interpolated_host_falls_back_to_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`host: ${UNSET}` must fall back to the model default, not yield "https://:443"."""
+    monkeypatch.delenv("CATALYST_CENTER_HOST", raising=False)
+    path = tmp_path / "catalyst-center-mcp.yaml"
+    path.write_text("catalyst_center:\n  host: ${CATALYST_CENTER_HOST}\n")
+    cfg = load_config(str(path))
+    assert cfg.catalyst_center.host == "sandboxdnac.cisco.com"
+    assert cfg.catalyst_center.base_url == "https://sandboxdnac.cisco.com:443"
+
+
 def test_bearer_requires_token(tmp_path: Path) -> None:
     path = tmp_path / "config.yaml"
     path.write_text(
