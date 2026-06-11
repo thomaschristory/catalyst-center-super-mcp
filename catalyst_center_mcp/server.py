@@ -17,12 +17,12 @@ from pathlib import Path
 from typing import Literal, cast
 
 import httpx
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from fastmcp import FastMCP
 from starlette.middleware import Middleware
 
 from . import __version__
-from .auth import CatalystCenterAuth
+from .auth import CatalystCenterAuth, require_credentials
 from .config import DEFAULT_CONFIG_PATH, AppConfig, load_config, resolve_config_path
 from .diff import diff_versions, print_diff
 from .dispatcher import Dispatcher
@@ -104,6 +104,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _load_env(config_path: str | None = None) -> None:
+    """Load a ``.env`` so ``${VAR}`` interpolation and credentials resolve.
+
+    python-dotenv's bare ``load_dotenv()`` searches upward from *this module's*
+    directory. Once the package is installed (``uv tool install`` / pipx), that
+    is site-packages — so a ``.env`` in the user's project dir is never found
+    (#26). We instead search the current working directory, and additionally
+    next to the ``--config`` file when one is given. Already-exported shell
+    variables always win (``override=False``)."""
+    # .env in the cwd (or any parent) — the usual "run it from my project" case.
+    cwd_env = find_dotenv(usecwd=True)
+    if cwd_env:
+        load_dotenv(cwd_env)
+    # .env beside the config file — covers `--config /elsewhere/catalyst-center-mcp.yaml`.
+    if config_path:
+        cfg_env = Path(config_path).resolve().parent / ".env"
+        if cfg_env.is_file():
+            load_dotenv(cfg_env)
+
+
 def _load_config_or_default(config_path: str) -> AppConfig:
     try:
         return load_config(config_path)
@@ -165,8 +185,14 @@ async def _maybe_auto_fetch(
 async def _connect_and_register(
     args: argparse.Namespace,
 ) -> tuple[FastMCP, Dispatcher, TransportMode, str, int, list[Middleware]]:
-    load_dotenv()
-    config = _load_config_or_default(args.config)
+    _load_env(args.config)
+    config = load_config(
+        args.config or DEFAULT_CONFIG_PATH,
+        required=getattr(args, "config_explicit", False),
+    )
+
+    # Fail fast: spec loading (and auto-fetch) is pointless without credentials.
+    require_credentials(config.catalyst_center.username, config.catalyst_center.password)
 
     version = args.version or config.catalyst_center_mcp.active_version
     transport = args.transport or config.transport.mode
@@ -284,6 +310,9 @@ def main(argv: list[str] | None = None) -> int:
         explicit=explicit,
     )
     args.config = config_path
+    # Preserve whether --config was passed explicitly: a missing default file is
+    # fine (env-only), but an explicitly-passed missing --config must still error.
+    args.config_explicit = explicit
 
     if args.diff:
         config = _load_config_or_default(config_path)

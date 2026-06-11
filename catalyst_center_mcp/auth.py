@@ -46,6 +46,24 @@ class AuthError(RuntimeError):
     """Raised when login fails or header() is requested before login()."""
 
 
+def require_credentials(username: str, password: str) -> None:
+    """Raise a helpful error if Catalyst Center credentials are missing.
+
+    Called early at startup (before spec loading) to fail fast, and again in
+    ``CatalystCenterAuth.login`` as defense-in-depth."""
+    if not username or not password:
+        raise RuntimeError(
+            "Catalyst Center credentials are not set.\n"
+            "Provide CATALYST_CENTER_USERNAME and CATALYST_CENTER_PASSWORD via either:\n"
+            "  - exported shell environment variables, or\n"
+            "  - a .env file in the directory you run the command from "
+            "(or next to --config).\n"
+            "When launched by an MCP client (e.g. Claude Code), the client "
+            "does not inherit your shell exports — set them in the client's "
+            "server `env` block instead."
+        )
+
+
 _TOKEN_PATH = "/dna/system/api/v1/auth/token"
 
 

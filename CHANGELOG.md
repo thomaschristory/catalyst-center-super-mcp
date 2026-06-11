@@ -5,6 +5,26 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-06-11
+
+env/config hardening so the server runs under `uv tool install` + an MCP client. See the [v0.4.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/4) for the full PR list.
+
+### Fixed
+- **`.env` is now discovered from your project dir, not site-packages** (#26). The old bare `load_dotenv()` searched upward from the installed module's directory — once installed via `uv tool`/pipx that is `site-packages/`, so a `.env` in your working directory was silently ignored. `_load_env()` now searches the cwd (and next to `--config`), and exported shell variables still win.
+- **The YAML config file is now optional** (#26). The server no longer crashes with `FileNotFoundError: Config file not found` when no `catalyst-center-mcp.yaml` is on disk. Credentials and connection settings can come from `CATALYST_CENTER_*` env vars (or a `.env`) alone.
+- **Fail fast on missing credentials** (#26). Startup now validates `CATALYST_CENTER_USERNAME` / `CATALYST_CENTER_PASSWORD` *before* spec loading and emits an actionable error (including the "set them in the MCP client's `env` block" hint) instead of failing deep inside the auth flow.
+
+### Changed
+- **Config now resolves with a clear precedence: CLI flags > env vars > YAML > defaults** (#26). `config.py` was rebuilt on `pydantic` / `pydantic-settings`; flat `CATALYST_CENTER_*` env vars deep-merge over YAML per-leaf (other YAML fields survive). The `${VAR}` interpolation inside YAML, the legacy `config.yaml` fallback, and the transport bearer-token checks are all preserved.
+- **`catalyst_center.host` now defaults to `sandboxdnac.cisco.com`** (the DevNet always-on sandbox) so env-only runs work out of the box. `verify_ssl` still defaults to `true`.
+- An explicitly-passed `--config` that doesn't exist still errors; a missing *default* config file no longer does.
+
+### Added
+- New deps: `pydantic>=2.0`, `pydantic-settings>=2.0`.
+- Tests: env-only config, env-overrides-YAML deep merge, bare section, `verify_ssl=false` bool coercion, `.env` discovery + exported-var precedence, and credentials-validated-before-spec-load.
+
+[0.4.0]: https://github.com/thomaschristory/catalyst-center-super-mcp/releases/tag/v0.4.0
+
 ## [0.3.1] — 2026-05-28
 
 Two-PR patch release. See the [v0.3.1 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/3) for the full PR list.

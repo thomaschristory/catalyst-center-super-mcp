@@ -18,8 +18,21 @@ uv tool install catalyst-center-super-mcp
 ## Configure
 
 Copy `.env.example` to `.env` and fill in your Catalyst Center credentials.
-See `catalyst-center-mcp.yaml` for runtime knobs (transport, splitting cap,
-retries, pagination).
+
+The YAML config file is **optional** — exporting `CATALYST_CENTER_USERNAME` /
+`CATALYST_CENTER_PASSWORD` (or a `.env`) is enough to start, which is what makes
+the server work under `uv tool install` + an MCP client (whose working directory
+is not your project dir). Settings resolve in this order, highest first:
+
+**CLI flags > environment variables > YAML file > built-in defaults.**
+
+Env vars: `CATALYST_CENTER_HOST`, `CATALYST_CENTER_PORT`,
+`CATALYST_CENTER_USERNAME`, `CATALYST_CENTER_PASSWORD`,
+`CATALYST_CENTER_VERIFY_SSL`. When launched by an MCP client, set them in the
+client's server `env` block (the client does not inherit your shell exports).
+
+See `catalyst-center-mcp.yaml` for the remaining runtime knobs (transport,
+splitting cap, retries, pagination).
 
 ## Run
 
