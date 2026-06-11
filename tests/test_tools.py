@@ -62,11 +62,16 @@ async def test_registered_tool_schema_exposes_only_action_and_params(
 
     fastmcp 3.x runs a pydantic TypeAdapter over the *full* handler signature to
     build each tool's input schema. If `_register_group_tool` ever leaked an
-    internal closure (e.g. `_dispatcher: Dispatcher = dispatcher`) into the
-    signature via the default-arg capture pattern, pydantic would raise
-    PydanticSchemaGenerationError on the arbitrary type at registration. Pinning
-    the schema to exactly {action, params} fails loudly and early if that
-    happens, instead of an opaque stack trace deep in fastmcp."""
+    internal closure into the signature via the default-arg capture pattern,
+    this test fails two ways depending on the leaked type:
+      - an arbitrary type (e.g. `_dispatcher: Dispatcher = dispatcher`) raises
+        PydanticSchemaGenerationError inside `register_tools` below, before the
+        assert is even reached;
+      - a schematizable type (e.g. a stray `str`/`int` default arg) registers
+        fine but pollutes the schema, which the `== {action, params}` assert
+        then catches.
+    Either way the failure is loud and local, not an opaque stack trace deep in
+    fastmcp at a user's first startup."""
     index = SpecLoader(str(minimal_specs_dir), "2.3.7.9", read_write=False).load()
     mcp, d = _make_setup(minimal_specs_dir)
     register_tools(mcp, index, d)
