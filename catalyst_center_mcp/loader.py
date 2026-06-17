@@ -68,6 +68,23 @@ class ParameterSpec:
 
 
 @dataclass
+class BodyFieldSpec:
+    """A single top-level field of a JSON request body.
+
+    Surfaced from the OpenAPI ``requestBody`` schema (resolving ``$ref`` and
+    merging ``allOf``) so the tool description can name the real body fields a
+    caller passes at the top level of ``params`` — rather than the opaque
+    ``body: object`` wrapper that misled callers into nesting under a literal
+    ``body`` key (#32).
+    """
+
+    name: str
+    type: str = "string"
+    required: bool = False
+    description: str = ""
+
+
+@dataclass
 class OperationSpec:
     operation_id: str  # Cisco's operationId — kept as a back-reference for --diff
     action_name: str  # stable, derived name used by the dispatcher and MCP tools
@@ -78,6 +95,7 @@ class OperationSpec:
     parameters: list[ParameterSpec] = field(default_factory=list)
     has_body: bool = False
     body_description: str = ""
+    body_fields: list[BodyFieldSpec] = field(default_factory=list)
     pagination: Literal["scroll", "cursor", "offset"] | None = None
 
 
@@ -282,16 +300,135 @@ def _detect_pagination_style(
     return None
 
 
+def _resolve_ref(ref: str, schemas: dict[str, Any]) -> dict[str, Any]:
+    """Resolve a local ``#/components/schemas/Name`` ref one level.
+
+    Only local component refs are followed; anything else, a missing target, or a
+    malformed (non-dict) target yields an empty dict, so callers degrade to "no
+    known fields" rather than raising on an unfamiliar spec shape.
+    """
+    prefix = "#/components/schemas/"
+    if not ref.startswith(prefix):
+        return {}
+    target = schemas.get(ref[len(prefix) :])
+    return target if isinstance(target, dict) else {}
+
+
+# Hard ceiling on how deep ``_collect_body_fields`` will recurse. The cycle
+# guard (``seen_refs``) only stops *repeated* refs; it does nothing to cap a deep
+# but cycle-free chain (a long ``allOf:[{$ref: next}]`` ladder, or deeply nested
+# inline ``allOf`` with no $ref at all). Without a ceiling such a schema recurses
+# one Python frame per level and a ~450+-deep chain raises ``RecursionError`` at
+# the stock limit (1000). ``RecursionError`` is a ``RuntimeError``, not caught by
+# the loader's ``yaml.YAMLError``/``ValueError`` guard, so a single exotic
+# operation would abort the whole ``load()`` and server startup. 64 is far deeper
+# than any real Catalyst Center body composition while staying well clear of the
+# interpreter limit (#32).
+_MAX_BODY_DEPTH = 64
+
+
+def _collect_body_fields(
+    schema: Any,
+    schemas: dict[str, Any],
+    properties: dict[str, Any],
+    required: set[str],
+    seen_refs: set[str],
+    depth: int = 0,
+) -> None:
+    """Walk a JSON-body schema collecting top-level ``properties`` and ``required``.
+
+    Follows ``$ref`` (one component at a time, cycle-guarded by ``seen_refs``) and
+    merges across ``allOf`` members — a Catalyst Center composed body is often
+    ``allOf: [ {$ref: Base}, {properties: {...real fields...}} ]``, so the fields
+    only surface if we descend both. ``oneOf``/``anyOf`` are deliberately NOT
+    merged: they are unions, so flattening them would assert fields that don't
+    co-occur. Every step is isinstance-guarded so a malformed spec degrades to
+    "no known fields" instead of crashing the whole loader. Recursion is bounded
+    by ``_MAX_BODY_DEPTH`` so a deep (cycle-free) ref/``allOf`` chain stops
+    cleanly instead of raising ``RecursionError`` and aborting the loader (#32).
+    """
+    if depth >= _MAX_BODY_DEPTH:
+        return
+    if not isinstance(schema, dict):
+        return
+    ref = schema.get("$ref")
+    if isinstance(ref, str):
+        if ref in seen_refs:
+            return
+        seen_refs.add(ref)
+        _collect_body_fields(
+            _resolve_ref(ref, schemas), schemas, properties, required, seen_refs, depth + 1
+        )
+        return
+    props = schema.get("properties")
+    if isinstance(props, dict):
+        for name, prop in props.items():
+            properties.setdefault(name, prop)
+    req = schema.get("required")
+    if isinstance(req, list):
+        required.update(r for r in req if isinstance(r, str))
+    for member in schema.get("allOf") or []:
+        _collect_body_fields(member, schemas, properties, required, seen_refs, depth + 1)
+
+
+def _parse_request_body(
+    operation: dict[str, Any], schemas: dict[str, Any]
+) -> tuple[bool, str, list[BodyFieldSpec]]:
+    """Extract (has_body, description, top-level fields) from a requestBody.
+
+    The fields list is best-effort: it is populated only when the JSON body
+    schema (after resolving ``$ref``/``allOf``) declares ``properties``. Some
+    Catalyst Center bodies are bare ``{"type": "object"}`` with no properties in
+    the spec, so the list is left empty and the description falls back to a
+    top-level-convention note (#32). We never invent fields the spec doesn't
+    describe — Catalyst Center has no fixed-field bare-object query family
+    (unlike vManage's /statistics DSL), so there is nothing to bake in here.
+    """
+    if "requestBody" not in operation:
+        return False, "", []
+
+    request_body = operation["requestBody"]
+    if not isinstance(request_body, dict):
+        return True, "", []
+
+    description = request_body.get("description", "Request body (JSON)")
+
+    content = request_body.get("content")
+    content = content if isinstance(content, dict) else {}
+    media = (
+        content.get("application/json")
+        or content.get("application/json;charset=utf-8")
+        or content.get("*/*")
+        or {}
+    )
+    media = media if isinstance(media, dict) else {}
+    schema = media.get("schema")
+    schema = schema if isinstance(schema, dict) else {}
+
+    properties: dict[str, Any] = {}
+    required: set[str] = set()
+    _collect_body_fields(schema, schemas, properties, required, set())
+
+    fields = [
+        BodyFieldSpec(
+            name=name,
+            type=_extract_type(prop if isinstance(prop, dict) else {}),
+            required=name in required,
+            description=(prop.get("description", "") if isinstance(prop, dict) else ""),
+        )
+        for name, prop in properties.items()
+    ]
+    return True, description, fields
+
+
 def _parse_operation(
     path: str,
     method: str,
     operation: dict[str, Any],
     tag: str,
+    schemas: dict[str, Any] | None = None,
 ) -> OperationSpec:
-    has_body = "requestBody" in operation
-    body_desc = ""
-    if has_body:
-        body_desc = operation["requestBody"].get("description", "Request body (JSON)")
+    has_body, body_desc, body_fields = _parse_request_body(operation, schemas or {})
 
     op_id = operation.get("operationId", f"{method}_{path}")
     parameters = _parse_parameters(operation.get("parameters", []))
@@ -305,6 +442,7 @@ def _parse_operation(
         parameters=parameters,
         has_body=has_body,
         body_description=body_desc,
+        body_fields=body_fields,
         pagination=_detect_pagination_style(parameters),
     )
 
@@ -653,6 +791,7 @@ class SpecLoader:
 
     @staticmethod
     def _extract_operations(spec: dict[str, Any]) -> list[OperationSpec]:
+        schemas = spec.get("components", {}).get("schemas", {}) or {}
         ops: list[OperationSpec] = []
         for path, path_item in spec.get("paths", {}).items():
             for method, operation in path_item.items():
@@ -661,7 +800,7 @@ class SpecLoader:
                 if not isinstance(operation, dict):
                     continue
                 tags = operation.get("tags") or ["Untagged"]
-                ops.append(_parse_operation(path, method.lower(), operation, tags[0]))
+                ops.append(_parse_operation(path, method.lower(), operation, tags[0], schemas))
         return ops
 
     # ------------------------------------------------------------------

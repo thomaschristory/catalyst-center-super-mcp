@@ -98,3 +98,114 @@ async def test_unknown_action_returns_error_envelope(
     assert isinstance(result, dict)
     assert result.get("error") is True
     assert "nope_not_real" in result["message"]
+
+
+# ---------------------------------------------------------------------------
+# Body-field rendering + top-level convention note (#32)
+# ---------------------------------------------------------------------------
+
+
+def test_build_description_renders_top_level_body_fields() -> None:
+    from catalyst_center_mcp.loader import BodyFieldSpec, OperationSpec, ToolGroup
+    from catalyst_center_mcp.tools import _build_description
+
+    op = OperationSpec(
+        operation_id="x",
+        action_name="post_things_thing",
+        summary="Create a thing",
+        method="post",
+        path="/dna/intent/api/v1/thing",
+        tag="Things",
+        has_body=True,
+        body_description="Thing payload",
+        body_fields=[
+            BodyFieldSpec(name="name", type="string", required=True),
+            BodyFieldSpec(name="size", type="integer", required=False),
+        ],
+    )
+    desc = _build_description(ToolGroup(name="things", display_tag="Things", operations=[op]))
+    # Real fields rendered at the top level, not "body: object".
+    assert "body fields (top-level): name: string, size?: integer" in desc
+    assert "body: object" not in desc
+    # Convention note present because the tool has a body-bearing action.
+    assert "do NOT nest them under a 'body' key" in desc
+
+
+def test_build_description_body_falls_back_when_no_fields() -> None:
+    from catalyst_center_mcp.loader import OperationSpec, ToolGroup
+    from catalyst_center_mcp.tools import _build_description
+
+    op = OperationSpec(
+        operation_id="x",
+        action_name="post_things_thing",
+        summary="",
+        method="post",
+        path="/dna/intent/api/v1/thing",
+        tag="Things",
+        has_body=True,
+        body_description="Opaque payload",
+        body_fields=[],
+    )
+    desc = _build_description(ToolGroup(name="things", display_tag="Things", operations=[op]))
+    assert "opaque JSON object" in desc
+    assert "Opaque payload" in desc
+    assert "do NOT nest them under a 'body' key" in desc
+
+
+def test_build_description_omits_note_for_read_only_tools() -> None:
+    """The top-level-body note costs tokens; emit it only on tools that actually
+    have a body-bearing action (#32)."""
+    from catalyst_center_mcp.loader import OperationSpec, ParameterSpec, ToolGroup
+    from catalyst_center_mcp.tools import _build_description
+
+    op = OperationSpec(
+        operation_id="x",
+        action_name="get_things_thing",
+        summary="List things",
+        method="get",
+        path="/dna/intent/api/v1/thing",
+        tag="Things",
+        parameters=[ParameterSpec(name="limit", location="query")],
+        has_body=False,
+    )
+    desc = _build_description(ToolGroup(name="things", display_tag="Things", operations=[op]))
+    assert "do NOT nest them under a 'body' key" not in desc
+
+
+def test_build_description_drops_body_field_colliding_with_query_param() -> None:
+    """When a body field shares a name with a query param, the dispatcher buckets
+    that name to the query string (path > query > body), so it never reaches the
+    JSON body. The description must NOT advertise it as a body field — otherwise
+    it would render twice and promise a destination the dispatcher can't honour.
+    Description and bucketing must agree (#32)."""
+    from catalyst_center_mcp.loader import (
+        BodyFieldSpec,
+        OperationSpec,
+        ParameterSpec,
+        ToolGroup,
+    )
+    from catalyst_center_mcp.tools import _build_description
+
+    op = OperationSpec(
+        operation_id="x",
+        action_name="post_things_thing",
+        summary="Create a thing",
+        method="post",
+        path="/dna/intent/api/v1/thing",
+        tag="Things",
+        parameters=[ParameterSpec(name="limit", location="query", type="integer")],
+        has_body=True,
+        body_description="Thing payload",
+        body_fields=[
+            BodyFieldSpec(name="name", type="string", required=True),
+            BodyFieldSpec(name="limit", type="integer", required=False),
+        ],
+    )
+    desc = _build_description(ToolGroup(name="things", display_tag="Things", operations=[op]))
+    # The non-colliding body field is still advertised.
+    assert "name: string" in desc
+    # The body field list excludes the colliding `limit` — it shows only `name`.
+    assert "body fields (top-level): name: string)" in desc.replace("\n", "")
+    # `limit` is rendered exactly once — as the query param, not also as a body
+    # field (the dispatcher routes it to the query string, never the body).
+    assert desc.count("limit") == 1
