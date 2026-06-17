@@ -5,7 +5,9 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] — 2026-06-17
+
+The request-body-fields fix, an off-by-default debug mode, security-audit hardening, and removal of the legacy `config.yaml` shim. See the [v0.5.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/8) for the full PR list.
 
 ### Added
 - **Debug mode for capturing the upstream Catalyst Center request/response (#31).** A new
@@ -85,6 +87,8 @@ Preventive hardening of tool registration. See the [v0.4.1 milestone](https://gi
 
 ### Changed
 - **Dependency floor `fastmcp>=2.0` → `fastmcp>=3.0`** (#29). We already require and run on fastmcp 3.x; tightening the floor stops a resolver from silently drifting back to untested 2.x signature-introspection behavior.
+
+[0.5.0]: https://github.com/thomaschristory/catalyst-center-super-mcp/releases/tag/v0.5.0
 
 [0.4.1]: https://github.com/thomaschristory/catalyst-center-super-mcp/releases/tag/v0.4.1
 
