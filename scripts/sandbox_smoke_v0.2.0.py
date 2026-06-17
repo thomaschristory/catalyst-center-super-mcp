@@ -11,8 +11,8 @@ that respx-only tests can't cover:
 3. Proactive refresh — force `_expires_at` close to now, make a call, and
    confirm the dispatcher proactively re-logs in (stderr log assertion).
 
-Usage:
-    CATALYST_CENTER_USERNAME=devnetuser CATALYST_CENTER_PASSWORD='Cisco123!' \
+Usage (DevNet sandbox creds are public/rotating — look them up on the catalog):
+    CATALYST_CENTER_USERNAME=<sandbox-user> CATALYST_CENTER_PASSWORD=<sandbox-password> \
         uv run python scripts/sandbox_smoke_v0.2.0.py
 """
 
@@ -142,8 +142,14 @@ async def probe_3_proactive(username: str, password: str) -> dict:
 
 
 async def main() -> int:
-    username = os.environ.get("CATALYST_CENTER_USERNAME", "devnetuser")
-    password = os.environ.get("CATALYST_CENTER_PASSWORD", "Cisco123!")
+    username = os.environ.get("CATALYST_CENTER_USERNAME")
+    password = os.environ.get("CATALYST_CENTER_PASSWORD")
+    if not username or not password:
+        raise SystemExit(
+            "Set CATALYST_CENTER_USERNAME and CATALYST_CENTER_PASSWORD before "
+            "running this smoke script (DevNet sandbox creds are public/rotating "
+            "— look them up on the sandbox catalog page)."
+        )
 
     results: dict[str, dict] = {}
     try:

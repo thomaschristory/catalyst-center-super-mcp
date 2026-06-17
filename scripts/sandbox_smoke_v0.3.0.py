@@ -20,8 +20,8 @@ New in v0.3.0:
    because the page is JS-only. The probe passes if the exit code matches
    the documented experimental behavior.
 
-Usage:
-    CATALYST_CENTER_USERNAME=devnetuser CATALYST_CENTER_PASSWORD='Cisco123!' \
+Usage (DevNet sandbox creds are public/rotating — look them up on the catalog):
+    CATALYST_CENTER_USERNAME=<sandbox-user> CATALYST_CENTER_PASSWORD=<sandbox-password> \
         uv run python scripts/sandbox_smoke_v0.3.0.py
 """
 
@@ -198,8 +198,14 @@ def probe_5_discover_versions() -> dict:
 
 
 async def main() -> int:
-    username = os.environ.get("CATALYST_CENTER_USERNAME", "devnetuser")
-    password = os.environ.get("CATALYST_CENTER_PASSWORD", "Cisco123!")
+    username = os.environ.get("CATALYST_CENTER_USERNAME")
+    password = os.environ.get("CATALYST_CENTER_PASSWORD")
+    if not username or not password:
+        raise SystemExit(
+            "Set CATALYST_CENTER_USERNAME and CATALYST_CENTER_PASSWORD before "
+            "running this smoke script (DevNet sandbox creds are public/rotating "
+            "— look them up on the sandbox catalog page)."
+        )
 
     results: dict[str, dict] = {}
     for name, coro in [
