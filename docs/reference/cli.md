@@ -11,6 +11,7 @@ catalyst-center-mcp [--config PATH] [--transport stdio|sse|streamable-http]
                     [--host HOST] [--port PORT] [--read-write]
                     [--version VERSION] [--max-actions-per-tool N]
                     [--insecure-allow-public]
+                    [--debug] [--debug-all-calls] [--debug-no-redact]
                     [--diff OLD NEW]
                     [--show-version]
 ```
@@ -24,8 +25,46 @@ catalyst-center-mcp [--config PATH] [--transport stdio|sse|streamable-http]
 | `--version` | Override `catalyst_center_mcp.active_version`. |
 | `--max-actions-per-tool N` | Override the adaptive-splitter cap (0 disables splitting). |
 | `--insecure-allow-public` | Permit binding `0.0.0.0` with `transport.auth.type=none`. Not recommended. |
+| `--debug` | Capture the upstream Catalyst Center request/response on failed calls and surface a redacted `debug` object in the tool result + stderr. Off by default; observational only (no new tool, safe in read-only mode). Equivalent to `CATALYST_CENTER_MCP_DEBUG=1`. |
+| `--debug-all-calls` | With `--debug`: capture every call, not just failures (verbose). Equivalent to `CATALYST_CENTER_MCP_DEBUG_CAPTURE=all`. |
+| `--debug-no-redact` | With `--debug`: do **not** strip auth headers / credential-shaped body values from captured output. Only safe on a trusted local terminal. Equivalent to `CATALYST_CENTER_MCP_DEBUG_REDACT=0`. |
 | `--diff OLD NEW` | Diff two on-disk spec versions and exit. |
 | `--show-version` | Print version and exit. |
+
+The `--debug*` flags default to `None` (not `False`) so an unset flag never
+overrides an env/YAML `debug.*` setting — only an explicitly passed flag wins,
+preserving the CLI > env > YAML precedence used everywhere else.
+
+### Debug mode (#31)
+
+Debug mode is **off by default and changes nothing when off**. Turning it on
+makes the dispatcher attach a structured `debug` object to tool results and log
+the same record to stderr (one `[dispatcher][debug] {...}` JSON line), so you
+can see exactly what was sent to and returned by Catalyst Center — the resolved
+method/path, the **exact serialized request body actually sent**, and the full
+upstream status / error code / headers / body, plus timing and the tool/action
+name. It is the way to diagnose opaque upstream errors from the *facts of the
+exchange* rather than guessing.
+
+With `redact: true` (the default), the captured `debug` object and its stderr
+line are scrubbed so they are safe to share:
+
+- **Auth headers** — `X-Auth-Token`, `Authorization`, `Cookie`, `Set-Cookie`
+  (and `Proxy-Authorization`) — are replaced with `<redacted>`.
+- **Credential-shaped body/query values** — the value of any key matching
+  `token` / `secret` / `password` / `cookie` / `credential` / `apiKey` /
+  `sessionId` / `privateKey` (case-insensitive) is replaced with `<redacted>`.
+  This matters because Catalyst Center's auth endpoint returns the credential
+  *in the response body* as `{"Token": "..."}` — header-only redaction would
+  leak it into a capture labelled "safe to share".
+
+Redaction is scoped to the diagnostic capture; the primary tool result is the
+data the caller requested and is returned as-is. Oversized captured bodies are
+truncated. `capture: errors` (default) attaches `debug` only to failed calls;
+`capture: all` also attaches it to dict-shaped successes (list/str successes go
+to stderr only, to avoid reshaping the payload). The env equivalents are
+`CATALYST_CENTER_MCP_DEBUG`, `CATALYST_CENTER_MCP_DEBUG_REDACT`, and
+`CATALYST_CENTER_MCP_DEBUG_CAPTURE`.
 
 ## Subcommands
 

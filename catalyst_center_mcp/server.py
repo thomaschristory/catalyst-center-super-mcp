@@ -23,7 +23,13 @@ from starlette.middleware import Middleware
 
 from . import __version__
 from .auth import CatalystCenterAuth, require_credentials
-from .config import DEFAULT_CONFIG_PATH, AppConfig, load_config, resolve_config_path
+from .config import (
+    DEFAULT_CONFIG_PATH,
+    AppConfig,
+    DebugConfig,
+    load_config,
+    resolve_config_path,
+)
 from .diff import diff_versions, print_diff
 from .dispatcher import Dispatcher
 from .fetcher import (
@@ -101,7 +107,59 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="version",
         version=f"catalyst-center-mcp {__version__}",
     )
+    # Debug capture (#31). default=None so an unset flag does NOT override an
+    # env/YAML setting — only an explicitly passed flag takes precedence.
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=None,
+        help=(
+            "Capture the upstream Catalyst Center request/response on failed "
+            "calls and surface it as a redacted 'debug' object in the tool "
+            "result + stderr. Also via CATALYST_CENTER_MCP_DEBUG=1. Off by "
+            "default; observational only."
+        ),
+    )
+    parser.add_argument(
+        "--debug-all-calls",
+        action="store_true",
+        default=None,
+        help="With --debug: capture every call, not just failures (verbose).",
+    )
+    parser.add_argument(
+        "--debug-no-redact",
+        action="store_true",
+        default=None,
+        help=(
+            "With --debug: do NOT strip auth headers/credential-shaped values "
+            "from captured output. Only use on a trusted local terminal — "
+            "output may contain tokens."
+        ),
+    )
     return parser.parse_args(argv)
+
+
+def resolve_debug_config(
+    base: DebugConfig,
+    *,
+    debug: bool | None,
+    all_calls: bool | None,
+    no_redact: bool | None,
+) -> DebugConfig:
+    """Layer the CLI debug flags over the env/YAML-derived ``DebugConfig``.
+
+    Each flag defaults to ``None`` (not ``False``), so an *unset* flag leaves
+    the env/YAML value intact — only an explicitly-passed flag overrides it,
+    preserving the CLI > env > YAML > defaults precedence used everywhere else.
+    """
+    overrides: dict[str, object] = {}
+    if debug:
+        overrides["enabled"] = True
+    if all_calls:
+        overrides["capture"] = "all"
+    if no_redact:
+        overrides["redact"] = False
+    return base.model_copy(update=overrides) if overrides else base
 
 
 def _load_env(config_path: str | None = None) -> None:
@@ -231,6 +289,26 @@ async def _connect_and_register(
         else config.catalyst_center_mcp.max_actions_per_tool
     )
 
+    # Layer CLI debug flags over the env/YAML-derived DebugConfig (CLI wins).
+    debug_cfg = resolve_debug_config(
+        config.debug,
+        debug=getattr(args, "debug", None),
+        all_calls=getattr(args, "debug_all_calls", None),
+        no_redact=getattr(args, "debug_no_redact", None),
+    )
+    if debug_cfg.enabled:
+        print(
+            f"[server] Debug      : ON (capture={debug_cfg.capture}, "
+            f"redact={'on' if debug_cfg.redact else 'OFF'})",
+            file=sys.stderr,
+        )
+        if not debug_cfg.redact:
+            print(
+                "[server] WARNING: debug redaction is OFF — captured output may "
+                "contain auth tokens. Do not share these logs.",
+                file=sys.stderr,
+            )
+
     middleware_list: list[Middleware] = []
     if transport_mode != "stdio":
         effective_host, warnings = decide_bind(
@@ -279,6 +357,7 @@ async def _connect_and_register(
         timeout=config.catalyst_center.timeout,
         pagination=config.catalyst_center_mcp.pagination,
         retry=config.catalyst_center.retries,
+        debug=debug_cfg,
     )
     await dispatcher.connect()
     dispatcher.set_index(index)
