@@ -27,7 +27,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from .dispatcher import Dispatcher, DispatchResult
-from .loader import ParameterSpec, SpecIndex, ToolGroup
+from .loader import BodyFieldSpec, OperationSpec, ParameterSpec, SpecIndex, ToolGroup
 
 
 def _format_param(p: ParameterSpec) -> str:
@@ -35,6 +35,39 @@ def _format_param(p: ParameterSpec) -> str:
     desc = f" — {p.description}" if p.description else ""
     default = f" (default: {p.default})" if p.default is not None else ""
     return f"{p.name}{req}: {p.type}{desc}{default}"
+
+
+def _format_body_field(f: BodyFieldSpec) -> str:
+    req = "" if f.required else "?"
+    return f"{f.name}{req}: {f.type}"
+
+
+def _format_body(op: OperationSpec) -> str:
+    """Render the request body for a POST/PUT/PATCH action — terse.
+
+    Body fields are TOP-LEVEL keys of ``params``, not nested under a ``body`` key.
+    The old ``body: object`` rendering read as "pass {"body": {...}}" and
+    double-wrapped the payload, which the API rejected (#32). We name the real
+    fields inline when the spec describes them, else fall back to the body
+    description; the one-line convention ("…go in params at the top level, not
+    under a 'body' key") is stated once per tool in the trailing guidance rather
+    than repeated on every action, to keep the description compact.
+
+    A body field whose name collides with a path/query param is dropped from the
+    rendered list: the dispatcher buckets such a name to the path/query slot (it
+    tests those memberships before ``has_body``), so it never reaches the JSON
+    body. Advertising it as a body field would promise a destination the
+    dispatcher can't honour — description and bucketing must agree (#32). No
+    currently-shipped Catalyst Center op has such a collision; this only guards a
+    future spec.
+    """
+    param_names = {p.name for p in op.parameters if p.location in ("path", "query")}
+    body_fields = [f for f in op.body_fields if f.name not in param_names]
+    if body_fields:
+        fields = ", ".join(_format_body_field(f) for f in body_fields)
+        return f"body fields (top-level): {fields}"
+    suffix = f" — {op.body_description}" if op.body_description else ""
+    return f"body fields (top-level): opaque JSON object{suffix}"
 
 
 _PAGINATION_HINT = (
@@ -58,7 +91,7 @@ def _build_description(group: ToolGroup) -> str:
         for p in query_params:
             param_parts.append(_format_param(p))
         if op.has_body:
-            param_parts.append(f"body: object — {op.body_description}")
+            param_parts.append(_format_body(op))
 
         params_str = ", ".join(param_parts) if param_parts else ""
         summary = op.summary.strip() if op.summary else ""
@@ -70,6 +103,13 @@ def _build_description(group: ToolGroup) -> str:
     lines.append("")
     lines.append("Pass 'action' as one of the action names above.")
     lines.append("Pass 'params' as a dict matching the action's parameter list.")
+    # Only worth the tokens when the tool actually has a body-bearing action —
+    # in the default read-only mode most tools have none (#32).
+    if any(op.has_body for op in group.operations):
+        lines.append(
+            "For POST/PUT/PATCH, put the request-body fields directly in 'params' at the "
+            "top level — do NOT nest them under a 'body' key."
+        )
 
     return "\n".join(lines)
 

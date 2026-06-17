@@ -27,6 +27,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only). The CLI flags default to `None` so an unset flag never overrides an env/YAML
   setting (CLI > env > YAML precedence). Purely observational — no new tool, no mutating
   surface, safe in read-only mode. Default (debug off) behaviour is byte unchanged.
+- **`OperationSpec.body_fields` + `loader._parse_request_body()` (#32).** Best-effort
+  extraction of a request body's top-level fields (names, types, required flags) from the
+  OpenAPI `requestBody` schema — resolving `$ref`, merging `allOf`, cycle-, depth- and
+  isinstance-guarded so a malformed/bare-object body schema degrades to an empty field list
+  instead of raising and aborting the whole loader at startup. Recursion is bounded
+  (`_MAX_BODY_DEPTH = 64`) so a deep but cycle-free `$ref`/`allOf` chain stops cleanly
+  rather than raising `RecursionError` (a `RuntimeError` the loader's `yaml.YAMLError`/
+  `ValueError` guard would not catch) and aborting startup.
+
+### Fixed
+- **POST/PUT/PATCH tools no longer mislead callers into wrapping the body (#32).** Every
+  write action used to declare its request body as a single param literally named
+  `body: object`, while the dispatcher forwarded `params` **verbatim** as the HTTP body —
+  so the schema-faithful call `params={"body": {...}}` double-wrapped and Catalyst Center
+  rejected it; only passing the fields at the top level of `params` worked. Schema and
+  behavior now agree:
+  - The tool description names the **real top-level body fields** (resolved from the spec's
+    `requestBody` schema, following `$ref` and merging `allOf`), e.g.
+    `body fields (top-level): name: string, size?: integer`, falling back to an
+    `opaque JSON object` note when the spec declares a bare object with no properties.
+    Catalyst Center has **no** vManage-style fixed-field bare-object query family
+    (only 4 bare-object bodies exist, all unrelated `icapSettings` operations), so no field
+    list is baked in and no stats-specific error hint is added. A body field whose name
+    collides with a path/query param is **dropped** from the rendered body-field list,
+    because the dispatcher buckets such a name to the path/query slot (it tests those
+    memberships before `has_body`) and it never reaches the JSON body — so advertising it
+    as a body field would promise a destination the dispatcher can't honour.
+  - A single per-tool note states the convention once: request-body fields go at the **top
+    level** of `params`, never nested under a `body` key. The note is omitted from tools
+    with no body-bearing action (most tools in the default read-only mode), so it costs
+    nothing where it doesn't apply.
+  - The dispatcher **defensively unwraps** a lone `{"body": <value>}` wrapper (any value
+    type, including non-dict) so a caller that followed the old misleading schema still
+    succeeds; a genuine `body` field alongside other fields is left untouched.
 
 ### Security
 - **Security audit hardening** (#28). A sweep of the dispatcher, startup path, Docker image, and CI surface:

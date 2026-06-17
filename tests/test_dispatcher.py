@@ -276,3 +276,62 @@ async def test_unknown_action_returns_error(minimal_specs_dir: Path) -> None:
     result = await d.call("nope_not_real", {})
     await d.close()
     assert isinstance(result, dict) and result.get("error") is True
+
+
+# ---------------------------------------------------------------------------
+# POST body: top-level convention + defensive `body`-wrapper unwrap (#32)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_dispatcher_unwraps_lone_body_wrapper(minimal_specs_dir: Path) -> None:
+    """A caller that nested the whole payload under a lone `body` key (the shape
+    the old `body: object` schema implied) must not double-wrap: the dispatcher
+    unwraps it so the API sees the fields at the top level (#32)."""
+    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    d = _make_dispatcher(minimal_specs_dir)
+    await d.call("post_devices_network_device", {"body": {"name": "edge-1"}})
+    await d.close()
+
+    body = route.calls.last.request.content.decode()
+    assert '"name"' in body and "edge-1" in body
+    # The literal `body` wrapper must NOT reach the API.
+    assert '"body"' not in body
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_dispatcher_keeps_body_field_alongside_others(minimal_specs_dir: Path) -> None:
+    """Only a *lone* `body` key is unwrapped. A genuine field named `body` next to
+    other fields is forwarded verbatim — we don't guess it's a wrapper."""
+    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    d = _make_dispatcher(minimal_specs_dir)
+    await d.call("post_devices_network_device", {"body": "literal", "name": "edge-1"})
+    await d.close()
+
+    body = route.calls.last.request.content.decode()
+    assert '"body"' in body and "literal" in body
+    assert "edge-1" in body
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_dispatcher_unwraps_lone_body_wrapper_non_dict(minimal_specs_dir: Path) -> None:
+    """The lone-`body` unwrap covers non-dict payloads too (e.g. an array body
+    nested under `body`) — otherwise the double-wrap persists (#32)."""
+    import json as _json
+
+    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    d = _make_dispatcher(minimal_specs_dir)
+    await d.call("post_devices_network_device", {"body": [{"x": 1}, {"x": 2}]})
+    await d.close()
+
+    sent = _json.loads(route.calls.last.request.content.decode())
+    assert sent == [{"x": 1}, {"x": 2}]  # array forwarded, not {"body": [...]}

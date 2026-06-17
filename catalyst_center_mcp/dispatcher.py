@@ -272,7 +272,18 @@ class Dispatcher:
             **self._auth.header(),
         }
 
-        sent_body = body_params if body_params else None
+        sent_body: Any = body_params if body_params else None
+        # Defensive unwrap (#32): the body fields belong at the top level of
+        # params, but a caller that followed the old `body: object` schema may
+        # nest the whole payload under a lone `body` key. Forwarding that
+        # verbatim double-wraps the request (the API rejects the extra `body`
+        # wrapper). When `body` is the *sole* body key, unwrap it — whatever its
+        # value (object, array, or scalar) — so every nested-style call works; a
+        # real field literally named `body` alongside other fields is left
+        # untouched. (A None value can't occur here: None params are dropped
+        # during the path/query/body split above.)
+        if isinstance(sent_body, dict) and set(sent_body) == {"body"}:
+            sent_body = sent_body["body"]
         debug_on = self._debug_cfg.enabled
         started = time.monotonic()
 
@@ -384,7 +395,7 @@ class Dispatcher:
         method: str,
         url: str,
         params: dict[str, Any] | None,
-        json: dict[str, Any] | None,
+        json: Any,
         headers: dict[str, str],
         retryable: bool,
     ) -> httpx.Response:
@@ -436,7 +447,7 @@ class Dispatcher:
         tool_name: str | None,
         path: str,
         query_params: dict[str, Any],
-        body: dict[str, Any] | None,
+        body: Any,
         request_headers: dict[str, str],
         *,
         response: httpx.Response | None,
