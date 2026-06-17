@@ -64,11 +64,11 @@ No XSRF, no cookie jar, no separate JWT-vs-session modes. Auth is meaningfully *
 
 Verification steps before committing the auth module:
 
-1. Hit the sandbox: `curl -u devnetuser:Cisco123! -X POST https://sandboxdnac.cisco.com/dna/system/api/v1/auth/token`
+1. Hit the sandbox: `curl -u devnetuser:<sandbox-password> -X POST https://sandboxdnac.cisco.com/dna/system/api/v1/auth/token`
 2. Confirm response shape and header name (case sensitivity matters — Cisco docs say `X-Auth-Token`).
 3. Confirm 401 behaviour when token is stale.
 
-DevNet sandbox creds (always-on, public): `devnetuser` / `Cisco123!` — but **always re-check on the sandbox catalog page** as Cisco rotates these.
+DevNet sandbox creds (always-on, public): `devnetuser` / `<sandbox-password>` — these are public and rotating, so **always re-check on the sandbox catalog page** for the current value.
 
 ---
 

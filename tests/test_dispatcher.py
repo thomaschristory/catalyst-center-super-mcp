@@ -82,6 +82,58 @@ async def test_path_param_substituted(minimal_specs_dir: Path) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_path_param_normal_values_unchanged(minimal_specs_dir: Path) -> None:
+    """A UUID or dotted IP path param must reach the wire unescaped (#28)."""
+    for value in ("abc-123-DEF_456.7~8", "10.0.0.1"):
+        route = respx.get(f"https://cc.test:443/dna/intent/api/v1/network-device/{value}").mock(
+            return_value=httpx.Response(200, json={"response": {"id": value}})
+        )
+        d = _make_dispatcher(minimal_specs_dir)
+        await d.call(
+            "get_devices_network_device__dna_intent_api_v1_network_device__2",
+            {"id": value},
+        )
+        await d.close()
+        # quote(safe='') leaves alphanumerics and -._~ untouched, so the path
+        # segment is byte-identical to the supplied value.
+        assert route.called
+        assert route.calls[0].request.url.raw_path.decode().endswith(f"/network-device/{value}")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_path_param_injection_is_percent_encoded(minimal_specs_dir: Path) -> None:
+    """A path param with '/', '..', '?', '#' must be percent-encoded so it
+    cannot escape its URL segment (path-injection hardening, #28)."""
+    malicious = "../../admin/secret?x=1#frag/"
+    # The whole value lands percent-encoded inside the {id} segment. The route
+    # below is the ONLY URL respx will answer; if the value escaped the segment
+    # (e.g. resolved '..' or split on '?'), this request would not match and the
+    # call would fail instead of returning 200.
+    route = respx.get(
+        "https://cc.test:443/dna/intent/api/v1/network-device/"
+        "..%2F..%2Fadmin%2Fsecret%3Fx%3D1%23frag%2F"
+    ).mock(return_value=httpx.Response(200, json={"response": {}}))
+    d = _make_dispatcher(minimal_specs_dir)
+    result = await d.call(
+        "get_devices_network_device__dna_intent_api_v1_network_device__2",
+        {"id": malicious},
+    )
+    await d.close()
+    assert route.called
+    assert not (isinstance(result, dict) and result.get("error"))
+    sent = route.calls[0].request.url.raw_path.decode()
+    # No structural metacharacters survive raw in the outgoing path: '?' and '#'
+    # were percent-encoded, and every '/' inside the value became '%2F' so the
+    # value stays inside its single segment (no traversal, no query/fragment).
+    assert "?" not in sent
+    assert "#" not in sent
+    assert "%2F" in sent  # the slashes were encoded
+    assert sent.endswith("..%2F..%2Fadmin%2Fsecret%3Fx%3D1%23frag%2F")
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_missing_path_param_returns_error(minimal_specs_dir: Path) -> None:
     d = _make_dispatcher(minimal_specs_dir)
     result = await d.call("get_devices_network_device__dna_intent_api_v1_network_device__2", {})

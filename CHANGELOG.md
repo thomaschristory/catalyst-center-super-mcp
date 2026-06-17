@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Security audit hardening** (#28). A sweep of the dispatcher, startup path, Docker image, and CI surface:
+  - **Path-param injection defense in the dispatcher.** Each path-parameter value is now percent-encoded (`urllib.parse.quote(..., safe="")`) before substitution into the URL template, so a value containing `/`, `..`, `?`, or `#` can no longer alter the request's path structure or escape its URL segment. Legitimate UUIDs and dotted IPs are unaffected (`quote` leaves `-._~` and alphanumerics unescaped).
+  - **TLS-downgrade visibility.** When `catalyst_center.verify_ssl` is `False`, startup now emits a one-line stderr WARNING that device credentials and the `X-Auth-Token` traverse an unverified TLS channel, and points at using a CA bundle instead. `.env.example` no longer nudges toward disabling verification — it documents pointing at a CA bundle for self-signed/private-CA certs.
+  - **Dependabot auto-merge narrowed.** Auto-merge is now restricted to `github_actions` ecosystem bumps and semver-**patch** updates only; semver-minor was dropped so minor bumps require human review. The existing safety properties are unchanged (`if: github.actor == dependabot[bot]`, no checkout, no execution of PR code, commit-pinned actions, `--auto` so required checks still gate the merge).
+  - **Docker image runs as non-root.** The runtime stage adds a `--system --uid 10001 appuser`, chowns `/app`, and switches to `USER 10001` before the entrypoint. The app only reads mounted specs and listens on a port, so it needs no root.
+  - **uv pinned to an immutable digest in the Docker builder.** `ghcr.io/astral-sh/uv:latest` → `ghcr.io/astral-sh/uv:0.11.21@sha256:ff07b86af50d4d9391d9daf4ff89ce427bc544f9aae87057e69a1cc0aa369946` (multi-arch manifest-list digest) for a reproducible builder.
+
+### Changed
+- **Removed literal public-sandbox credentials from docs/usage examples** (#28). The Dockerfile usage comments, the `CATALYST_CENTER_BOOTSTRAP.md` curl example, and the `scripts/sandbox_smoke_v0.{2,3}.0.py` usage now use placeholders and recommend `--env-file` / a secrets manager over literal `-e` flags. The smoke scripts no longer fall back to a hard-coded sandbox password — they now require `CATALYST_CENTER_USERNAME`/`CATALYST_CENTER_PASSWORD` and exit with a clear error if unset.
+
 ### Removed
 - **Legacy `config.yaml` fallback** (#22). When `--config` was not passed and `catalyst-center-mcp.yaml` was absent, the resolver used to silently fall back to a `config.yaml` in the cwd (and emit a stderr DEPRECATION warning), along with a NOTE when both files coexisted. That shim has been live since v0.3.0; v0.5.0 is the cutoff, so it is now gone. Rename any lingering `config.yaml` to `catalyst-center-mcp.yaml`, or point at it with `--config`. The explicit-`--config` behavior (a missing explicit path still errors) and the default-missing-config behavior (no error, env + defaults) are unchanged.
 

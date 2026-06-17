@@ -17,6 +17,33 @@ def test_default_args_are_stdio() -> None:
     assert args.read_write is False
 
 
+def test_tls_warning_fires_on_stderr_when_verify_ssl_false(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from catalyst_center_mcp.config import AppConfig
+    from catalyst_center_mcp.server import _warn_if_tls_unverified
+
+    config = AppConfig.model_validate({"catalyst_center": {"verify_ssl": False}})
+    _warn_if_tls_unverified(config)
+    captured = capsys.readouterr()
+    assert captured.out == ""  # never stdout (stdio JSON-RPC stream)
+    assert "verify_ssl is False" in captured.err
+    assert "WARNING" in captured.err
+
+
+def test_tls_warning_silent_when_verify_ssl_true(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from catalyst_center_mcp.config import AppConfig
+    from catalyst_center_mcp.server import _warn_if_tls_unverified
+
+    config = AppConfig.model_validate({"catalyst_center": {"verify_ssl": True}})
+    _warn_if_tls_unverified(config)
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
 def test_read_write_flag() -> None:
     from catalyst_center_mcp.server import parse_args
 

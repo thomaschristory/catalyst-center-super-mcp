@@ -124,6 +124,25 @@ def _load_env(config_path: str | None = None) -> None:
             load_dotenv(cfg_env)
 
 
+def _warn_if_tls_unverified(config: AppConfig) -> None:
+    """Emit a one-line stderr WARNING when TLS verification is disabled.
+
+    The downgrade is otherwise invisible. Fires once per run on stderr (never
+    stdout — stdio MCP reserves stdout for the JSON-RPC stream). When
+    ``verify_ssl`` is True this is a no-op.
+    """
+    if config.catalyst_center.verify_ssl:
+        return
+    print(
+        "[server] WARNING: catalyst_center.verify_ssl is False — TLS certificate "
+        "verification is DISABLED. Device credentials and the X-Auth-Token "
+        "traverse an unverified TLS channel and are exposed to man-in-the-middle "
+        "interception. For self-signed certs, set SSL_CERT_FILE to a CA bundle "
+        "path instead of disabling verification.",
+        file=sys.stderr,
+    )
+
+
 def _load_config_or_default(config_path: str) -> AppConfig:
     try:
         return load_config(config_path)
@@ -193,6 +212,8 @@ async def _connect_and_register(
 
     # Fail fast: spec loading (and auto-fetch) is pointless without credentials.
     require_credentials(config.catalyst_center.username, config.catalyst_center.password)
+
+    _warn_if_tls_unverified(config)
 
     version = args.version or config.catalyst_center_mcp.active_version
     transport = args.transport or config.transport.mode

@@ -20,6 +20,7 @@ import random
 import re
 import sys
 from typing import Any, TypeAlias
+from urllib.parse import quote
 
 import httpx
 
@@ -195,7 +196,12 @@ class Dispatcher:
 
         url = op.path
         for name, value in path_params.items():
-            url = url.replace(f"{{{name}}}", str(value))
+            # Percent-encode each path-param value before substitution so a
+            # value containing '/', '..', '?', or '#' cannot alter the path
+            # structure (path-injection / segment-escape). quote() with
+            # safe='' leaves alphanumerics and '-._~' unescaped, so legitimate
+            # UUIDs and dotted IPs survive unchanged.
+            url = url.replace(f"{{{name}}}", quote(str(value), safe=""))
 
         if "{" in url:
             missing = re.findall(r"\{([^}]+)\}", url)
