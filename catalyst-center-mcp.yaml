@@ -27,6 +27,15 @@ catalyst_center_mcp:
     max_pages: 5
     page_size: null
 
+debug:
+  # Capture the exact upstream Catalyst Center request/response when a call
+  # fails, so opaque errors can be diagnosed rather than guessed at. Off by
+  # default; observational only (no new mutating surface, safe in read-only
+  # mode). See docs/reference/cli.md.
+  enabled: false             # CATALYST_CENTER_MCP_DEBUG=1 / --debug
+  redact: true               # strip auth headers + credential-shaped body values; CATALYST_CENTER_MCP_DEBUG_REDACT=0 / --debug-no-redact to disable
+  capture: errors            # "errors" (failed calls only) | "all"; CATALYST_CENTER_MCP_DEBUG_CAPTURE / --debug-all-calls
+
 transport:
   mode: stdio                       # stdio | sse | streamable-http
   host: 127.0.0.1

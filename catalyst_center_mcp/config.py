@@ -114,6 +114,28 @@ class PaginationConfig(_Base):
     page_size: int | None = None
 
 
+class DebugConfig(_Base):
+    """Verbose capture of the upstream Catalyst Center request/response (#31).
+
+    Off by default — enabling it never changes default behaviour, it only
+    *adds* a redacted ``debug`` object to tool results and a stderr log line.
+    Purely observational: it introduces no new mutating surface, so it is
+    safe in read-only mode.
+    """
+
+    # Master switch. Env: CATALYST_CENTER_MCP_DEBUG, CLI: --debug.
+    enabled: bool = False
+    # Strip auth headers (X-Auth-Token / Authorization / Cookie / Set-Cookie)
+    # AND credential-shaped body/query values from captured output so logs are
+    # safe to paste into an issue. Env: CATALYST_CENTER_MCP_DEBUG_REDACT=0,
+    # CLI: --debug-no-redact.
+    redact: bool = True
+    # Which calls to capture: "errors" (default — only failed upstream calls,
+    # matching #31's acceptance) or "all". Env: CATALYST_CENTER_MCP_DEBUG_CAPTURE,
+    # CLI: --debug-all-calls.
+    capture: Literal["errors", "all"] = "errors"
+
+
 class CatalystCenterMcpConfig(_Base):
     specs_dir: str = "./specs"
     active_version: str = "2.3.7.9"
@@ -185,12 +207,40 @@ class _CatalystCenterEnvSource(PydanticBaseSettingsSource):
         return {"catalyst_center": catalyst_center} if catalyst_center else {}
 
 
+class _DebugEnvSource(PydanticBaseSettingsSource):
+    """Maps the ``CATALYST_CENTER_MCP_DEBUG*`` env vars onto ``debug.*``.
+
+    Mirrors ``_CatalystCenterEnvSource``: these take precedence over the YAML
+    file so debug can be flipped on per-environment without editing config.
+    Empty/unset values are ignored so they don't clobber YAML/defaults. pydantic
+    coerces the string values ("1"/"0"/"true"/"false") to bool, and validates
+    ``capture`` against the Literal."""
+
+    _MAP: ClassVar[dict[str, str]] = {
+        "CATALYST_CENTER_MCP_DEBUG": "enabled",
+        "CATALYST_CENTER_MCP_DEBUG_REDACT": "redact",
+        "CATALYST_CENTER_MCP_DEBUG_CAPTURE": "capture",
+    }
+
+    def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        debug: dict[str, Any] = {}
+        for env_name, field in self._MAP.items():
+            value = os.environ.get(env_name)
+            if value:  # ignore unset and empty — let YAML/defaults stand
+                debug[field] = value
+        return {"debug": debug} if debug else {}
+
+
 class AppConfig(BaseSettings):
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
 
     catalyst_center: CatalystCenterConfig = Field(default_factory=CatalystCenterConfig)
     catalyst_center_mcp: CatalystCenterMcpConfig = Field(default_factory=CatalystCenterMcpConfig)
     transport: TransportConfig = Field(default_factory=TransportConfig)
+    debug: DebugConfig = Field(default_factory=DebugConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -210,10 +260,12 @@ class AppConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Priority: init kwargs > flat CATALYST_CENTER_* env > YAML file > defaults.
+        # Priority: init kwargs > flat CATALYST_CENTER_*/CATALYST_CENTER_MCP_DEBUG*
+        # env > YAML file > defaults.
         return (
             init_settings,
             _CatalystCenterEnvSource(settings_cls),
+            _DebugEnvSource(settings_cls),
             _YamlSource(settings_cls),
         )
 

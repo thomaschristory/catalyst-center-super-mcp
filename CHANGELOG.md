@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Debug mode for capturing the upstream Catalyst Center request/response (#31).** A new
+  off-by-default toggle (`debug.enabled` / `CATALYST_CENTER_MCP_DEBUG=1` / `--debug`) makes
+  the dispatcher attach a structured, redacted `debug` object to a tool result and
+  log the same record to stderr (one `[dispatcher][debug] {...}` JSON line), so opaque
+  upstream errors can be diagnosed from the *facts of the exchange* rather than inferred
+  from a hint. The record carries the resolved method/path, the **exact serialized
+  request body actually sent**, and the full upstream status / error code / headers /
+  body, plus timing and the tool/action name. Redaction is on by default and masks both
+  the auth headers (`X-Auth-Token` / `Authorization` / `Cookie` / `Set-Cookie`) **and
+  credential-shaped body/query values** (keys matching `token` / `secret` / `password` /
+  `cookie` / `apiKey` / `sessionId` / `credential` / `privateKey`), so a capture of the
+  auth endpoint — which returns the credential **in the response body** as `{"Token": ...}`
+  — is safe to share (`debug.redact: false` / `--debug-no-redact` to disable, with a
+  startup warning). Oversized bodies are truncated to keep records bounded. Capture
+  defaults to failed calls only; `debug.capture: all` / `--debug-all-calls` captures every
+  call (dict-shaped successes carry the `debug` object; list/str successes go to stderr
+  only). The CLI flags default to `None` so an unset flag never overrides an env/YAML
+  setting (CLI > env > YAML precedence). Purely observational — no new tool, no mutating
+  surface, safe in read-only mode. Default (debug off) behaviour is byte unchanged.
+
 ### Security
 - **Security audit hardening** (#28). A sweep of the dispatcher, startup path, Docker image, and CI surface:
   - **Path-param injection defense in the dispatcher.** Each path-parameter value is now percent-encoded (`urllib.parse.quote(..., safe="")`) before substitution into the URL template, so a value containing `/`, `..`, `?`, or `#` can no longer alter the request's path structure or escape its URL segment. Legitimate UUIDs and dotted IPs are unaffected (`quote` leaves `-._~` and alphanumerics unescaped).
