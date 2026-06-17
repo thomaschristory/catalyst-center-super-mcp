@@ -5,6 +5,11 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+- **Legacy `config.yaml` fallback** (#22). When `--config` was not passed and `catalyst-center-mcp.yaml` was absent, the resolver used to silently fall back to a `config.yaml` in the cwd (and emit a stderr DEPRECATION warning), along with a NOTE when both files coexisted. That shim has been live since v0.3.0; v0.5.0 is the cutoff, so it is now gone. Rename any lingering `config.yaml` to `catalyst-center-mcp.yaml`, or point at it with `--config`. The explicit-`--config` behavior (a missing explicit path still errors) and the default-missing-config behavior (no error, env + defaults) are unchanged.
+
 ## [0.4.1] — 2026-06-11
 
 Preventive hardening of tool registration. See the [v0.4.1 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/6) for the full PR list.
