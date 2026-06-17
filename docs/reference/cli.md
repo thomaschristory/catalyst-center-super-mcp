@@ -17,7 +17,7 @@ catalyst-center-mcp [--config PATH] [--transport stdio|sse|streamable-http]
 
 | Flag | Purpose |
 |---|---|
-| `--config PATH` | Path to the config file. Defaults to `./catalyst-center-mcp.yaml`. Legacy `config.yaml` is honored with a deprecation warning. |
+| `--config PATH` | Path to the config file. Defaults to `./catalyst-center-mcp.yaml`. A legacy `config.yaml` is no longer auto-detected — rename it to `catalyst-center-mcp.yaml` or pass it explicitly via `--config`. |
 | `--transport` | Override `transport.mode`. |
 | `--host`, `--port` | Override `transport.host` / `transport.port`. |
 | `--read-write` | Register POST/PUT/DELETE/PATCH endpoints. Read-only by default. |

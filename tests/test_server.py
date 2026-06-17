@@ -101,28 +101,6 @@ def test_parse_args_default_config_is_none() -> None:
     assert args.config is None
 
 
-def test_main_legacy_fallback_warns_on_stderr_only(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    minimal_specs_dir: Path,
-) -> None:
-    """A bare main() invocation in a cwd with only config.yaml uses the legacy file
-    and emits DEPRECATION to stderr, NOT stdout (stdio MCP JSON-RPC channel safety)."""
-    from catalyst_center_mcp import server
-
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "config.yaml").write_text(
-        f"catalyst_center:\n  host: localhost\n"
-        f"catalyst_center_mcp:\n  specs_dir: {minimal_specs_dir}\n  active_version: '2.3.7.9'\n"
-    )
-    rc = server.main(["--diff", "2.3.7.9", "2.3.7.9"])
-    captured = capsys.readouterr()
-    assert rc == 0
-    assert "DEPRECATION" in captured.err
-    assert "DEPRECATION" not in captured.out
-
-
 def test_main_explicit_missing_config_does_not_use_legacy(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
