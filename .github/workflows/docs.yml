@@ -6,12 +6,18 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - ".github/workflows/docs.yml"
+      # The docs toolchain (zensical) is pinned in the `docs` dependency group,
+      # so a dep bump can break the build without touching docs/ or mkdocs.yml.
+      - "pyproject.toml"
+      - "uv.lock"
   push:
     branches: [main]
     paths:
       - "docs/**"
       - "mkdocs.yml"
       - ".github/workflows/docs.yml"
+      - "pyproject.toml"
+      - "uv.lock"
   workflow_dispatch:
 
 permissions:
