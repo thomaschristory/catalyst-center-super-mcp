@@ -27,13 +27,20 @@ This repo was scaffolded on **2026-05-25** per [`docs/superpowers/specs/2026-05-
 - **Config parsing:** `pyyaml` + `python-dotenv`
 - **Tests:** `pytest`, `respx` (HTTP mocks), `pytest-asyncio`
 - **Lint / format:** `ruff`
-- **Docs:** `mkdocs-material`, deployed to GitHub Pages
+- **Docs:** `zensical` (reads the existing `mkdocs.yml`), deployed to GitHub Pages
 
 Setup:
 
 ```bash
 uv sync --group dev --group docs
 uv run catalyst-center-mcp --help
+```
+
+Docs (Zensical builds from `mkdocs.yml` — there is no `zensical.toml`):
+
+```bash
+uv run zensical serve             # local preview only — not for hosting
+uv run zensical build --strict    # what CI runs; validates links and anchors
 ```
 
 ---
@@ -124,7 +131,7 @@ catalyst-center-super-mcp/
     diff.py                   version diff utility
   tests/                      pytest suite (test_loader, test_dispatcher, test_diff, test_config)
     conftest.py               minimal OpenAPI spec fixture
-  docs/                       mkdocs-material site
+  docs/                       zensical site (config: mkdocs.yml)
     index.md
     getting-started/{install,first-run,sandbox}.md
     guides/{mcp-clients,read-write,tool-splitting,spec-versions,docker}.md
