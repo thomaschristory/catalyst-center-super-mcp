@@ -18,10 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declares no `plugins:` at all and uses only stock `theme.features`, all of which are
   supported — the module system that replaces third-party MkDocs plugins is not yet GA, but
   we depend on none of them. `mkdocs.yml` is deliberately left unchanged (no `zensical.toml`),
-  which also keeps the rollback a pure dependency/CI revert. One intentional visual change:
-  Zensical's modern theme paints the header from `--md-default-bg-color--light` rather than
-  the `primary` color, so the top bar is now near-white in light mode / near-black in dark
-  mode instead of indigo; the `indigo` palette still drives links and accents.
+  which also keeps the rollback a pure dependency/CI revert.
+
+### Added
+- **Warm "paper" docs theme, shared with `panorama-super-cli` (#45).** A small `extra_css`
+  (`docs/stylesheets/extra.css`) softens the stock black-on-white / white-on-black extremes
+  into a lower-glare warm pair, touching only background/foreground surfaces — the `indigo`
+  primary/accent from `mkdocs.yml` still drives links and accents. It also sets
+  `--md-default-bg-color--light`, which is the variable Zensical's *modern* theme uses to
+  paint the top bar (classic Material used `primary`), so the header is a lifted tone
+  distinct from the page body rather than the stock near-white/near-black.
 
 ## [0.5.0] — 2026-06-17
 
