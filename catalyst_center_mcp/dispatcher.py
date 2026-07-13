@@ -1,4 +1,4 @@
-"""httpx async client for Catalyst Center API calls.
+"""httpx2 async client for Catalyst Center API calls.
 
 Handles:
   - Auth via CatalystCenterAuth (single token-based flow)
@@ -24,7 +24,7 @@ import time
 from typing import Any, TypeAlias
 from urllib.parse import quote
 
-import httpx
+import httpx2
 
 from .auth import CatalystCenterAuth
 from .config import DebugConfig, PaginationConfig, RetryConfig
@@ -91,7 +91,7 @@ class Dispatcher:
         self._debug_cfg = debug or DebugConfig()
         self._auth_lock = asyncio.Lock()
 
-        self._client = httpx.AsyncClient(
+        self._client = httpx2.AsyncClient(
             base_url=self._base_url,
             verify=verify_ssl,
             timeout=timeout,
@@ -296,7 +296,7 @@ class Dispatcher:
                 headers=headers,
                 retryable=self._is_retryable(op.method),
             )
-        except httpx.RequestError as exc:
+        except httpx2.RequestError as exc:
             result: dict[str, Any] = {"error": True, "message": f"Request failed: {exc}"}
             if debug_on:
                 dbg = self._build_debug(
@@ -398,10 +398,10 @@ class Dispatcher:
         json: Any,
         headers: dict[str, str],
         retryable: bool,
-    ) -> httpx.Response:
+    ) -> httpx2.Response:
         cfg = self._retry_cfg
         attempts = max(1, cfg.max_attempts) if retryable else 1
-        last_response: httpx.Response | None = None
+        last_response: httpx2.Response | None = None
 
         for attempt in range(attempts):
             try:
@@ -412,7 +412,7 @@ class Dispatcher:
                     json=json,
                     headers=headers,
                 )
-            except httpx.RequestError:
+            except httpx2.RequestError:
                 if attempt + 1 >= attempts:
                     raise
                 await self._sleep_backoff(attempt)
@@ -450,7 +450,7 @@ class Dispatcher:
         body: Any,
         request_headers: dict[str, str],
         *,
-        response: httpx.Response | None,
+        response: httpx2.Response | None,
         elapsed_ms: float,
         request_error: str | None = None,
     ) -> dict[str, Any]:
@@ -575,7 +575,7 @@ def _error_code(body: Any) -> str | None:
     return None
 
 
-def _safe_json(response: httpx.Response) -> DispatchResult:
+def _safe_json(response: httpx2.Response) -> DispatchResult:
     try:
         data = response.json()
     except Exception:

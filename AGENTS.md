@@ -16,5 +16,11 @@ auth, project layout, data flow, CLI, Docker, and key decisions.
   mutating operations.
 - Specs go in `specs/{version}/` and may be `.yaml`, `.yml`, or `.json`. Filenames
   inside a version folder are arbitrary; they're merged in name order.
+- HTTP goes through **`httpx2`**, never `httpx` — `httpx` is still installed (as a
+  transitive dep of `mcp` and `respx`) but nothing in `catalyst_center_mcp/` may import
+  it. Tests mock via the `httpx2_mock: respx.Router` fixture, where responses are legacy
+  `httpx.Response` objects but exceptions must be `httpx2.*`. See the "HTTP client
+  (httpx2)" section of [CLAUDE.md](CLAUDE.md) — the asymmetry is deliberate and easy to
+  get wrong.
 - New Catalyst Center version = drop a new folder + change `catalyst_center_mcp.active_version` in
   `config.yaml`. No code changes.

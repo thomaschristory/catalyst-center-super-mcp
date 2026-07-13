@@ -7,6 +7,7 @@ import json
 import time
 
 import pytest
+import respx
 
 from catalyst_center_mcp.auth import CatalystCenterAuth, _decode_jwt_payload
 
@@ -123,10 +124,10 @@ def test_decode_rejects_bool_exp():
 
 
 @pytest.mark.asyncio
-async def test_login_handles_past_exp(capsys):
+async def test_login_handles_past_exp(capsys, httpx2_mock: respx.Router):
     """If server returns exp already in the past locally, degrade to reactive."""
     import httpx
-    import respx
+    import httpx2
 
     now = time.time()
     past_token = _make_jwt({"exp": now - 100})
@@ -135,12 +136,11 @@ async def test_login_handles_past_exp(capsys):
         host="example.com", port=443, username="u", password="p", verify_ssl=False
     )
 
-    with respx.mock:
-        respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
-            return_value=httpx.Response(200, json={"Token": past_token, "message": ""})
-        )
-        async with httpx.AsyncClient(verify=False) as client:
-            await auth.login(client)
+    httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+        return_value=httpx.Response(200, json={"Token": past_token, "message": ""})
+    )
+    async with httpx2.AsyncClient(verify=False) as client:
+        await auth.login(client)
 
     assert auth._expires_at is None
     assert auth.needs_refresh() is False
@@ -152,10 +152,10 @@ async def test_login_handles_past_exp(capsys):
 
 
 @pytest.mark.asyncio
-async def test_login_warns_when_exp_missing_or_wrong_type(capsys):
+async def test_login_warns_when_exp_missing_or_wrong_type(capsys, httpx2_mock: respx.Router):
     """JWT decoded but exp is wrong type or missing → warning to stderr."""
     import httpx
-    import respx
+    import httpx2
 
     # exp as string (RFC 7519 violation — must be NumericDate)
     bad_token = _make_jwt({"sub": "u", "exp": "1700000000"})
@@ -164,12 +164,11 @@ async def test_login_warns_when_exp_missing_or_wrong_type(capsys):
         host="example.com", port=443, username="u", password="p", verify_ssl=False
     )
 
-    with respx.mock:
-        respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
-            return_value=httpx.Response(200, json={"Token": bad_token, "message": ""})
-        )
-        async with httpx.AsyncClient(verify=False) as client:
-            await auth.login(client)
+    httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+        return_value=httpx.Response(200, json={"Token": bad_token, "message": ""})
+    )
+    async with httpx2.AsyncClient(verify=False) as client:
+        await auth.login(client)
 
     assert auth._expires_at is None
     captured = capsys.readouterr()
@@ -178,10 +177,10 @@ async def test_login_warns_when_exp_missing_or_wrong_type(capsys):
 
 
 @pytest.mark.asyncio
-async def test_login_warns_when_exp_missing(capsys):
+async def test_login_warns_when_exp_missing(capsys, httpx2_mock: respx.Router):
     """JWT with no exp claim → warning surfaced."""
     import httpx
-    import respx
+    import httpx2
 
     no_exp_token = _make_jwt({"sub": "u"})
 
@@ -189,12 +188,11 @@ async def test_login_warns_when_exp_missing(capsys):
         host="example.com", port=443, username="u", password="p", verify_ssl=False
     )
 
-    with respx.mock:
-        respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
-            return_value=httpx.Response(200, json={"Token": no_exp_token, "message": ""})
-        )
-        async with httpx.AsyncClient(verify=False) as client:
-            await auth.login(client)
+    httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+        return_value=httpx.Response(200, json={"Token": no_exp_token, "message": ""})
+    )
+    async with httpx2.AsyncClient(verify=False) as client:
+        await auth.login(client)
 
     assert auth._expires_at is None
     captured = capsys.readouterr()

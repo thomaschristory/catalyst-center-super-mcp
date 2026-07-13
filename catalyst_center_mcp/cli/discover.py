@@ -11,7 +11,7 @@ Exit codes:
   1  -- one or more hardcoded entries are no longer visible on DevNet.
         The hardcoded table may be stale.
   2  -- DiscoveryError (page shape changed / regex matched nothing) or
-        an httpx error (network down, non-2xx response).
+        an httpx2 error (network down, non-2xx response).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-import httpx
+import httpx2
 
 from catalyst_center_mcp.fetcher import KNOWN_SPEC_URLS
 from catalyst_center_mcp.fetcher.discover import (
@@ -48,7 +48,7 @@ def run_discover_versions(argv: list[str]) -> int:
     except DiscoveryError as exc:
         print(f"[discover] {exc}", file=sys.stderr)
         return 2
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)
         print(
             f"[discover] DevNet unreachable at {DEVNET_INDEX_URL} "
