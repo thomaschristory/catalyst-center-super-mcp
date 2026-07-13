@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import httpx
+import httpx2
 import pytest
 import respx
 
@@ -32,13 +33,12 @@ async def test_unknown_version_raises(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_success_writes_json(tmp_path: Path):
+async def test_success_writes_json(tmp_path: Path, httpx2_mock: respx.Router):
     url = KNOWN_SPEC_URLS["2.3.7.9"]
     body = b'{"openapi": "3.0.3", "paths": {}}'
-    respx.get(url).mock(return_value=httpx.Response(200, content=body))
+    httpx2_mock.get(url).mock(return_value=httpx.Response(200, content=body))
 
-    async with httpx.AsyncClient() as c:
+    async with httpx2.AsyncClient() as c:
         result = await fetch_spec("2.3.7.9", tmp_path, client=c)
 
     assert result.exists()
@@ -48,27 +48,25 @@ async def test_success_writes_json(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_success_swagger_2_accepted(tmp_path: Path):
+async def test_success_swagger_2_accepted(tmp_path: Path, httpx2_mock: respx.Router):
     """Swagger 2.0 specs (top-level 'swagger' key) are also valid."""
     url = KNOWN_SPEC_URLS["2.3.7.9"]
     body = b'{"swagger": "2.0", "paths": {}}'
-    respx.get(url).mock(return_value=httpx.Response(200, content=body))
+    httpx2_mock.get(url).mock(return_value=httpx.Response(200, content=body))
 
-    async with httpx.AsyncClient() as c:
+    async with httpx2.AsyncClient() as c:
         result = await fetch_spec("2.3.7.9", tmp_path, client=c)
 
     assert result.exists()
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_network_error_no_partial_file(tmp_path: Path):
+async def test_network_error_no_partial_file(tmp_path: Path, httpx2_mock: respx.Router):
     url = KNOWN_SPEC_URLS["2.3.7.9"]
-    respx.get(url).mock(side_effect=httpx.ConnectError("connection refused"))
+    httpx2_mock.get(url).mock(side_effect=httpx2.ConnectError("connection refused"))
 
-    async with httpx.AsyncClient() as c:
-        with pytest.raises(httpx.ConnectError):
+    async with httpx2.AsyncClient() as c:
+        with pytest.raises(httpx2.ConnectError):
             await fetch_spec("2.3.7.9", tmp_path, client=c)
 
     assert not list(tmp_path.glob("*.json"))
@@ -76,12 +74,11 @@ async def test_network_error_no_partial_file(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_invalid_json_no_partial_file(tmp_path: Path):
+async def test_invalid_json_no_partial_file(tmp_path: Path, httpx2_mock: respx.Router):
     url = KNOWN_SPEC_URLS["2.3.7.9"]
-    respx.get(url).mock(return_value=httpx.Response(200, content=b"not-json"))
+    httpx2_mock.get(url).mock(return_value=httpx.Response(200, content=b"not-json"))
 
-    async with httpx.AsyncClient() as c:
+    async with httpx2.AsyncClient() as c:
         with pytest.raises(json.JSONDecodeError):
             await fetch_spec("2.3.7.9", tmp_path, client=c)
 
@@ -90,13 +87,12 @@ async def test_invalid_json_no_partial_file(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_http_error_status_no_partial_file(tmp_path: Path):
+async def test_http_error_status_no_partial_file(tmp_path: Path, httpx2_mock: respx.Router):
     url = KNOWN_SPEC_URLS["2.3.7.9"]
-    respx.get(url).mock(return_value=httpx.Response(503, content=b"Service Unavailable"))
+    httpx2_mock.get(url).mock(return_value=httpx.Response(503, content=b"Service Unavailable"))
 
-    async with httpx.AsyncClient() as c:
-        with pytest.raises(httpx.HTTPStatusError):
+    async with httpx2.AsyncClient() as c:
+        with pytest.raises(httpx2.HTTPStatusError):
             await fetch_spec("2.3.7.9", tmp_path, client=c)
 
     assert not list(tmp_path.glob("*.json"))
@@ -104,14 +100,13 @@ async def test_http_error_status_no_partial_file(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_wrong_shape_rate_limit_error_raises(tmp_path: Path):
+async def test_wrong_shape_rate_limit_error_raises(tmp_path: Path, httpx2_mock: respx.Router):
     """200 OK + valid JSON but not an OpenAPI/Swagger doc → SpecContentInvalidError."""
     url = KNOWN_SPEC_URLS["2.3.7.9"]
     body = b'{"error": "rate-limited"}'
-    respx.get(url).mock(return_value=httpx.Response(200, content=body))
+    httpx2_mock.get(url).mock(return_value=httpx.Response(200, content=body))
 
-    async with httpx.AsyncClient() as c:
+    async with httpx2.AsyncClient() as c:
         with pytest.raises(SpecContentInvalidError) as exc_info:
             await fetch_spec("2.3.7.9", tmp_path, client=c)
 
@@ -125,14 +120,13 @@ async def test_wrong_shape_rate_limit_error_raises(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_wrong_shape_missing_paths_raises(tmp_path: Path):
+async def test_wrong_shape_missing_paths_raises(tmp_path: Path, httpx2_mock: respx.Router):
     """openapi key present but no paths → invalid."""
     url = KNOWN_SPEC_URLS["2.3.7.9"]
     body = b'{"openapi": "3.0.3"}'
-    respx.get(url).mock(return_value=httpx.Response(200, content=body))
+    httpx2_mock.get(url).mock(return_value=httpx.Response(200, content=body))
 
-    async with httpx.AsyncClient() as c:
+    async with httpx2.AsyncClient() as c:
         with pytest.raises(SpecContentInvalidError):
             await fetch_spec("2.3.7.9", tmp_path, client=c)
 
@@ -141,14 +135,13 @@ async def test_wrong_shape_missing_paths_raises(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_wrong_shape_json_array_raises(tmp_path: Path):
+async def test_wrong_shape_json_array_raises(tmp_path: Path, httpx2_mock: respx.Router):
     """Valid JSON but not even a dict → invalid."""
     url = KNOWN_SPEC_URLS["2.3.7.9"]
     body = b'["not", "a", "spec"]'
-    respx.get(url).mock(return_value=httpx.Response(200, content=body))
+    httpx2_mock.get(url).mock(return_value=httpx.Response(200, content=body))
 
-    async with httpx.AsyncClient() as c:
+    async with httpx2.AsyncClient() as c:
         with pytest.raises(SpecContentInvalidError):
             await fetch_spec("2.3.7.9", tmp_path, client=c)
 
@@ -157,14 +150,15 @@ async def test_wrong_shape_json_array_raises(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_redirect_followed(tmp_path: Path):
+async def test_redirect_followed(tmp_path: Path, httpx2_mock: respx.Router):
     """Pubhub may redirect via CDN — fetcher must follow."""
     url = KNOWN_SPEC_URLS["2.3.7.9"]
     redirect_target = "https://cdn.example.com/spec.json"
     body = b'{"openapi": "3.0.3", "paths": {}}'
-    respx.get(url).mock(return_value=httpx.Response(302, headers={"location": redirect_target}))
-    respx.get(redirect_target).mock(return_value=httpx.Response(200, content=body))
+    httpx2_mock.get(url).mock(
+        return_value=httpx.Response(302, headers={"location": redirect_target})
+    )
+    httpx2_mock.get(redirect_target).mock(return_value=httpx.Response(200, content=body))
 
     # Use module's own client so follow_redirects=True is exercised.
     result = await fetch_spec("2.3.7.9", tmp_path)

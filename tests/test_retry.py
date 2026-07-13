@@ -10,6 +10,7 @@ import random
 from pathlib import Path
 
 import httpx
+import httpx2
 import pytest
 import respx
 
@@ -67,9 +68,10 @@ def _recorded_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_retry_recovers_after_503(minimal_specs_dir: Path, _instant_sleep: None) -> None:
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+async def test_retry_recovers_after_503(
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
+) -> None:
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         side_effect=[
             httpx.Response(503, text="busy"),
             httpx.Response(200, json={"response": 1, "version": "1.0"}),
@@ -85,11 +87,10 @@ async def test_retry_recovers_after_503(minimal_specs_dir: Path, _instant_sleep:
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_retry_mutating_disabled_by_default(
-    minimal_specs_dir: Path, _instant_sleep: None
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
 ) -> None:
-    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+    route = httpx2_mock.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         return_value=httpx.Response(503, text="busy")
     )
     d = _make_dispatcher(
@@ -154,13 +155,12 @@ async def test_backoff_cap_actually_caps(
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_network_exception_retried_on_get(
-    minimal_specs_dir: Path, _instant_sleep: None
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
 ) -> None:
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         side_effect=[
-            httpx.ConnectError("boom"),
+            httpx2.ConnectError("boom"),
             httpx.Response(200, json={"response": 2, "version": "1.0"}),
         ]
     )
@@ -175,12 +175,11 @@ async def test_network_exception_retried_on_get(
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_network_exception_not_retried_on_post_without_retry_mutating(
-    minimal_specs_dir: Path, _instant_sleep: None
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
 ) -> None:
-    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
-        side_effect=httpx.ConnectError("boom"),
+    route = httpx2_mock.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+        side_effect=httpx2.ConnectError("boom"),
     )
     d = _make_dispatcher(
         minimal_specs_dir,
@@ -194,13 +193,12 @@ async def test_network_exception_not_retried_on_post_without_retry_mutating(
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_network_exception_retried_on_post_with_retry_mutating(
-    minimal_specs_dir: Path, _instant_sleep: None
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
 ) -> None:
-    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+    route = httpx2_mock.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         side_effect=[
-            httpx.ConnectError("boom"),
+            httpx2.ConnectError("boom"),
             httpx.Response(200, json={"response": {"taskId": "t1"}, "version": "1.0"}),
         ]
     )
@@ -216,11 +214,10 @@ async def test_network_exception_retried_on_post_with_retry_mutating(
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_retry_exhaustion_returns_error_envelope(
-    minimal_specs_dir: Path, _instant_sleep: None
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
 ) -> None:
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(503, text="still busy"),
     )
     d = _make_dispatcher(
@@ -236,12 +233,11 @@ async def test_retry_exhaustion_returns_error_envelope(
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_non_retryable_status_not_retried(
-    minimal_specs_dir: Path, _instant_sleep: None
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
 ) -> None:
     """A 404 must not be retried even when retry is configured for 503."""
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(404, json={"error": "not found"}),
     )
     d = _make_dispatcher(
@@ -257,12 +253,11 @@ async def test_non_retryable_status_not_retried(
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_max_attempts_one_disables_retry(
-    minimal_specs_dir: Path, _recorded_sleeps: list[float]
+    minimal_specs_dir: Path, _recorded_sleeps: list[float], httpx2_mock: respx.Router
 ) -> None:
     """max_attempts=1 means a single try; no sleeps scheduled."""
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(503, text="busy"),
     )
     d = _make_dispatcher(
@@ -277,12 +272,11 @@ async def test_max_attempts_one_disables_retry(
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_backoff_base_zero_skips_sleep(
-    minimal_specs_dir: Path, _recorded_sleeps: list[float]
+    minimal_specs_dir: Path, _recorded_sleeps: list[float], httpx2_mock: respx.Router
 ) -> None:
     """backoff_base <= 0 short-circuits without scheduling asyncio.sleep."""
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         side_effect=[
             httpx.Response(503, text="busy"),
             httpx.Response(503, text="busy"),
@@ -300,12 +294,13 @@ async def test_backoff_base_zero_skips_sleep(
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_mixed_mode_failure_sequence(minimal_specs_dir: Path, _instant_sleep: None) -> None:
+async def test_mixed_mode_failure_sequence(
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
+) -> None:
     """ConnectError → 503 → 200 — both retry branches compose without resetting attempts."""
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         side_effect=[
-            httpx.ConnectError("network blip"),
+            httpx2.ConnectError("network blip"),
             httpx.Response(503, text="still busy"),
             httpx.Response(200, json={"response": 42, "version": "1.0"}),
         ]
@@ -320,13 +315,12 @@ async def test_mixed_mode_failure_sequence(minimal_specs_dir: Path, _instant_sle
 
 
 @pytest.mark.asyncio
-@respx.mock
 async def test_exception_exhaustion_returns_error_envelope(
-    minimal_specs_dir: Path, _instant_sleep: None
+    minimal_specs_dir: Path, _instant_sleep: None, httpx2_mock: respx.Router
 ) -> None:
     """When all attempts fail with RequestError, returns {error: True, message: ...}."""
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
-        side_effect=httpx.ConnectError("down"),
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+        side_effect=httpx2.ConnectError("down"),
     )
     d = _make_dispatcher(
         minimal_specs_dir,
@@ -344,12 +338,12 @@ async def test_exception_exhaustion_returns_error_envelope(
 @pytest.mark.parametrize(
     "exc_factory",
     [
-        lambda: httpx.ConnectError("connect"),
-        lambda: httpx.ConnectTimeout("connect timeout"),
-        lambda: httpx.ReadTimeout("read timeout"),
-        lambda: httpx.WriteTimeout("write timeout"),
-        lambda: httpx.RemoteProtocolError("protocol"),
-        lambda: httpx.PoolTimeout("pool"),
+        lambda: httpx2.ConnectError("connect"),
+        lambda: httpx2.ConnectTimeout("connect timeout"),
+        lambda: httpx2.ReadTimeout("read timeout"),
+        lambda: httpx2.WriteTimeout("write timeout"),
+        lambda: httpx2.RemoteProtocolError("protocol"),
+        lambda: httpx2.PoolTimeout("pool"),
     ],
     ids=[
         "ConnectError",
@@ -360,14 +354,14 @@ async def test_exception_exhaustion_returns_error_envelope(
         "PoolTimeout",
     ],
 )
-@respx.mock
 async def test_request_error_subclasses_are_retried_on_get(
     minimal_specs_dir: Path,
     _instant_sleep: None,
     exc_factory,
+    httpx2_mock: respx.Router,
 ) -> None:
     """Every httpx.RequestError subclass is treated as transient on GET."""
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         side_effect=[
             exc_factory(),
             httpx.Response(200, json={"response": 9, "version": "1.0"}),

@@ -21,15 +21,16 @@ from catalyst_center_mcp.tools import register_tools
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_end_to_end_against_mocked_sandbox(minimal_specs_dir: Path) -> None:
-    respx.post("https://cc.test:443/dna/system/api/v1/auth/token").mock(
+async def test_end_to_end_against_mocked_sandbox(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
+    httpx2_mock.post("https://cc.test:443/dna/system/api/v1/auth/token").mock(
         return_value=httpx.Response(200, json={"Token": "live-token", "message": ""})
     )
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(200, json={"response": 7, "version": "1.0"})
     )
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         side_effect=[
             httpx.Response(200, json={"response": [{"id": "d1"}, {"id": "d2"}], "version": "1.0"}),
             httpx.Response(

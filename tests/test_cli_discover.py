@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import httpx2
 import pytest
 import respx
 
@@ -33,13 +34,15 @@ def _synth_url(version: str) -> str:
     )
 
 
-@respx.mock
 def test_discover_exit_zero_when_discovered_superset(
+    httpx2_mock: respx.Router,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Discovered contains everything in KNOWN_SPEC_URLS plus one extra.
     discovered = {**KNOWN_SPEC_URLS, "9.9.9": _synth_url("9.9.9")}
-    respx.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(200, text=_html_with(discovered)))
+    httpx2_mock.get(DEVNET_INDEX_URL).mock(
+        return_value=httpx.Response(200, text=_html_with(discovered))
+    )
     rc = run_discover_versions([])
     out = capsys.readouterr().out
     assert rc == 0
@@ -48,13 +51,15 @@ def test_discover_exit_zero_when_discovered_superset(
         assert f"= {v}" in out
 
 
-@respx.mock
 def test_discover_exit_one_on_stale_hardcoded(
+    httpx2_mock: respx.Router,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Discovered is missing one known version.
     only_one = dict(list(KNOWN_SPEC_URLS.items())[:1])
-    respx.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(200, text=_html_with(only_one)))
+    httpx2_mock.get(DEVNET_INDEX_URL).mock(
+        return_value=httpx.Response(200, text=_html_with(only_one))
+    )
     rc = run_discover_versions([])
     out = capsys.readouterr().out
     assert rc == 1
@@ -62,11 +67,11 @@ def test_discover_exit_one_on_stale_hardcoded(
     assert f"- {missing}" in out
 
 
-@respx.mock
 def test_discover_unchanged_when_exact_match(
+    httpx2_mock: respx.Router,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    respx.get(DEVNET_INDEX_URL).mock(
+    httpx2_mock.get(DEVNET_INDEX_URL).mock(
         return_value=httpx.Response(200, text=_html_with(KNOWN_SPEC_URLS))
     )
     rc = run_discover_versions([])
@@ -76,24 +81,23 @@ def test_discover_unchanged_when_exact_match(
     assert "- " not in out
 
 
-@respx.mock
-def test_discover_503_returns_exit_2() -> None:
+def test_discover_503_returns_exit_2(httpx2_mock: respx.Router) -> None:
     """Network errors specifically return exit 2 (not 1, not bare nonzero)."""
-    respx.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(503))
+    httpx2_mock.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(503))
     assert run_discover_versions([]) == 2
 
 
-@respx.mock
-def test_discover_connect_error_returns_exit_2() -> None:
+def test_discover_connect_error_returns_exit_2(httpx2_mock: respx.Router) -> None:
     """ConnectError (not just HTTP status errors) returns exit 2."""
-    respx.get(DEVNET_INDEX_URL).mock(side_effect=httpx.ConnectError("dns fail"))
+    httpx2_mock.get(DEVNET_INDEX_URL).mock(side_effect=httpx2.ConnectError("dns fail"))
     assert run_discover_versions([]) == 2
 
 
-@respx.mock
-def test_discover_shape_changed_returns_exit_2() -> None:
+def test_discover_shape_changed_returns_exit_2(httpx2_mock: respx.Router) -> None:
     """A 200 with no recognizable URLs (SPA / shape changed) → DiscoveryError → exit 2."""
-    respx.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(200, text="<html>spa</html>"))
+    httpx2_mock.get(DEVNET_INDEX_URL).mock(
+        return_value=httpx.Response(200, text="<html>spa</html>")
+    )
     assert run_discover_versions([]) == 2
 
 

@@ -59,13 +59,13 @@ def test_list_versions_lists_extra_dir(tmp_path: Path, capsys: pytest.CaptureFix
 
 def test_list_versions_no_network(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Block any outgoing HTTP — list-versions must be offline.
-    import httpx
+    import httpx2
 
     def _boom(*args: object, **kwargs: object) -> object:
         raise AssertionError("list-versions must not make HTTP calls")
 
-    monkeypatch.setattr(httpx, "get", _boom)
-    monkeypatch.setattr(httpx.Client, "request", _boom)
+    monkeypatch.setattr(httpx2, "get", _boom)
+    monkeypatch.setattr(httpx2.Client, "request", _boom)
     cfg = _config_yaml(tmp_path)
     rc = run_list_versions(["--config", str(cfg)])
     assert rc == 0

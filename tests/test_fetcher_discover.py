@@ -48,9 +48,8 @@ def test_parse_no_matches_raises() -> None:
         parse_discovery_html("<html>nothing relevant</html>")
 
 
-@respx.mock
-def test_discover_versions_uses_devnet_url() -> None:
-    respx.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(200, text=SAMPLE_HTML))
+def test_discover_versions_uses_devnet_url(httpx2_mock: respx.Router) -> None:
+    httpx2_mock.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(200, text=SAMPLE_HTML))
     result = discover_versions()
     assert "2.3.7.9" in result
     assert "3.1.3" in result
@@ -98,9 +97,10 @@ def test_parse_first_occurrence_wins_on_duplicate(
     assert "duplicate URLs for version" in captured.err
 
 
-@respx.mock
-def test_discover_versions_200_with_garbage_html_raises() -> None:
+def test_discover_versions_200_with_garbage_html_raises(httpx2_mock: respx.Router) -> None:
     """An HTTP 200 with no matching URLs propagates DiscoveryError (not silent empty dict)."""
-    respx.get(DEVNET_INDEX_URL).mock(return_value=httpx.Response(200, text="<html>spa</html>"))
+    httpx2_mock.get(DEVNET_INDEX_URL).mock(
+        return_value=httpx.Response(200, text="<html>spa</html>")
+    )
     with pytest.raises(DiscoveryError):
         discover_versions()
