@@ -54,9 +54,8 @@ def _instant_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_get_with_query_params(minimal_specs_dir: Path) -> None:
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+async def test_get_with_query_params(minimal_specs_dir: Path, httpx2_mock: respx.Router) -> None:
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(200, json={"response": 4, "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir)
@@ -67,9 +66,8 @@ async def test_get_with_query_params(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_path_param_substituted(minimal_specs_dir: Path) -> None:
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/abc-123").mock(
+async def test_path_param_substituted(minimal_specs_dir: Path, httpx2_mock: respx.Router) -> None:
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/abc-123").mock(
         return_value=httpx.Response(200, json={"response": {"id": "abc-123"}, "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir)
@@ -81,13 +79,14 @@ async def test_path_param_substituted(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_path_param_normal_values_unchanged(minimal_specs_dir: Path) -> None:
+async def test_path_param_normal_values_unchanged(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
     """A UUID or dotted IP path param must reach the wire unescaped (#28)."""
     for value in ("abc-123-DEF_456.7~8", "10.0.0.1"):
-        route = respx.get(f"https://cc.test:443/dna/intent/api/v1/network-device/{value}").mock(
-            return_value=httpx.Response(200, json={"response": {"id": value}})
-        )
+        route = httpx2_mock.get(
+            f"https://cc.test:443/dna/intent/api/v1/network-device/{value}"
+        ).mock(return_value=httpx.Response(200, json={"response": {"id": value}}))
         d = _make_dispatcher(minimal_specs_dir)
         await d.call(
             "get_devices_network_device__dna_intent_api_v1_network_device__2",
@@ -101,8 +100,9 @@ async def test_path_param_normal_values_unchanged(minimal_specs_dir: Path) -> No
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_path_param_injection_is_percent_encoded(minimal_specs_dir: Path) -> None:
+async def test_path_param_injection_is_percent_encoded(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
     """A path param with '/', '..', '?', '#' must be percent-encoded so it
     cannot escape its URL segment (path-injection hardening, #28)."""
     malicious = "../../admin/secret?x=1#frag/"
@@ -110,7 +110,7 @@ async def test_path_param_injection_is_percent_encoded(minimal_specs_dir: Path) 
     # below is the ONLY URL respx will answer; if the value escaped the segment
     # (e.g. resolved '..' or split on '?'), this request would not match and the
     # call would fail instead of returning 200.
-    route = respx.get(
+    route = httpx2_mock.get(
         "https://cc.test:443/dna/intent/api/v1/network-device/"
         "..%2F..%2Fadmin%2Fsecret%3Fx%3D1%23frag%2F"
     ).mock(return_value=httpx.Response(200, json={"response": {}}))
@@ -133,8 +133,9 @@ async def test_path_param_injection_is_percent_encoded(minimal_specs_dir: Path) 
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_missing_path_param_returns_error(minimal_specs_dir: Path) -> None:
+async def test_missing_path_param_returns_error(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
     d = _make_dispatcher(minimal_specs_dir)
     result = await d.call("get_devices_network_device__dna_intent_api_v1_network_device__2", {})
     await d.close()
@@ -144,9 +145,8 @@ async def test_missing_path_param_returns_error(minimal_specs_dir: Path) -> None
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_post_body_routing(minimal_specs_dir: Path) -> None:
-    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+async def test_post_body_routing(minimal_specs_dir: Path, httpx2_mock: respx.Router) -> None:
+    route = httpx2_mock.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         return_value=httpx.Response(200, json={"response": {"taskId": "t1"}, "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir, read_write=True)
@@ -162,9 +162,8 @@ async def test_post_body_routing(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_x_auth_token_header_sent(minimal_specs_dir: Path) -> None:
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+async def test_x_auth_token_header_sent(minimal_specs_dir: Path, httpx2_mock: respx.Router) -> None:
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(200, json={"response": 4, "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir)
@@ -174,13 +173,16 @@ async def test_x_auth_token_header_sent(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_401_triggers_reauth_and_retry(minimal_specs_dir: Path) -> None:
+async def test_401_triggers_reauth_and_retry(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
     """On 401, dispatcher re-runs login() and retries the call once."""
-    respx.post("https://cc.test:443/dna/system/api/v1/auth/token").mock(
+    httpx2_mock.post("https://cc.test:443/dna/system/api/v1/auth/token").mock(
         return_value=httpx.Response(200, json={"Token": "refreshed", "message": ""})
     )
-    count_route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    count_route = httpx2_mock.get(
+        "https://cc.test:443/dna/intent/api/v1/network-device/count"
+    ).mock(
         side_effect=[
             httpx.Response(401, json={"error": "expired"}),
             httpx.Response(200, json={"response": 7, "version": "1.0"}),
@@ -196,13 +198,14 @@ async def test_401_triggers_reauth_and_retry(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_persistent_401_returns_error(minimal_specs_dir: Path) -> None:
+async def test_persistent_401_returns_error(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
     """If a second 401 follows re-auth, return an error envelope, don't infinite-loop."""
-    respx.post("https://cc.test:443/dna/system/api/v1/auth/token").mock(
+    httpx2_mock.post("https://cc.test:443/dna/system/api/v1/auth/token").mock(
         return_value=httpx.Response(200, json={"Token": "fresh", "message": ""})
     )
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(401, json={"error": "still expired"})
     )
     d = _make_dispatcher(minimal_specs_dir)
@@ -214,10 +217,9 @@ async def test_persistent_401_returns_error(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_reserved_params_stripped(minimal_specs_dir: Path) -> None:
+async def test_reserved_params_stripped(minimal_specs_dir: Path, httpx2_mock: respx.Router) -> None:
     """`_max_pages`, `_page_size`, `_auto_follow` must not appear on the wire."""
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         return_value=httpx.Response(200, json={"response": [], "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir)
@@ -232,9 +234,10 @@ async def test_reserved_params_stripped(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_auto_follow_off_short_circuits_pagination(minimal_specs_dir: Path) -> None:
-    route = respx.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+async def test_auto_follow_off_short_circuits_pagination(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
+    route = httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         return_value=httpx.Response(200, json={"response": list(range(50)), "version": "1.0"})
     )
     d = _make_dispatcher(minimal_specs_dir)
@@ -252,9 +255,10 @@ async def test_auto_follow_off_short_circuits_pagination(minimal_specs_dir: Path
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_auto_follow_stitches_paginated_endpoint(minimal_specs_dir: Path) -> None:
-    respx.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+async def test_auto_follow_stitches_paginated_endpoint(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
+    httpx2_mock.get("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         side_effect=[
             httpx.Response(200, json={"response": [1, 2, 3], "version": "1.0"}),
             httpx.Response(200, json={"response": [4], "version": "1.0"}),  # short -> stop
@@ -284,12 +288,13 @@ async def test_unknown_action_returns_error(minimal_specs_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_dispatcher_unwraps_lone_body_wrapper(minimal_specs_dir: Path) -> None:
+async def test_dispatcher_unwraps_lone_body_wrapper(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
     """A caller that nested the whole payload under a lone `body` key (the shape
     the old `body: object` schema implied) must not double-wrap: the dispatcher
     unwraps it so the API sees the fields at the top level (#32)."""
-    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+    route = httpx2_mock.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         return_value=httpx.Response(200, json={"ok": True})
     )
     d = _make_dispatcher(minimal_specs_dir)
@@ -303,11 +308,12 @@ async def test_dispatcher_unwraps_lone_body_wrapper(minimal_specs_dir: Path) -> 
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_dispatcher_keeps_body_field_alongside_others(minimal_specs_dir: Path) -> None:
+async def test_dispatcher_keeps_body_field_alongside_others(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
     """Only a *lone* `body` key is unwrapped. A genuine field named `body` next to
     other fields is forwarded verbatim — we don't guess it's a wrapper."""
-    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+    route = httpx2_mock.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         return_value=httpx.Response(200, json={"ok": True})
     )
     d = _make_dispatcher(minimal_specs_dir)
@@ -320,13 +326,14 @@ async def test_dispatcher_keeps_body_field_alongside_others(minimal_specs_dir: P
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_dispatcher_unwraps_lone_body_wrapper_non_dict(minimal_specs_dir: Path) -> None:
+async def test_dispatcher_unwraps_lone_body_wrapper_non_dict(
+    minimal_specs_dir: Path, httpx2_mock: respx.Router
+) -> None:
     """The lone-`body` unwrap covers non-dict payloads too (e.g. an array body
     nested under `body`) — otherwise the double-wrap persists (#32)."""
     import json as _json
 
-    route = respx.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
+    route = httpx2_mock.post("https://cc.test:443/dna/intent/api/v1/network-device").mock(
         return_value=httpx.Response(200, json={"ok": True})
     )
     d = _make_dispatcher(minimal_specs_dir)

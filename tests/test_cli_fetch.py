@@ -31,12 +31,11 @@ def test_fetch_unknown_version_exits_nonzero(
     assert "No known download URL" in captured.err or "Unknown" in captured.err
 
 
-@respx.mock
-def test_fetch_known_version_writes_file(tmp_path: Path) -> None:
+def test_fetch_known_version_writes_file(tmp_path: Path, httpx2_mock: respx.Router) -> None:
     version = "2.3.7.9"
     url = KNOWN_SPEC_URLS[version]
     body = b'{"openapi": "3.0.0", "paths": {}, "info": {"title": "x", "version": "1"}}'
-    respx.get(url).mock(return_value=httpx.Response(200, content=body))
+    httpx2_mock.get(url).mock(return_value=httpx.Response(200, content=body))
     cfg = _minimal_config_yaml(tmp_path)
     rc = run_fetch([version, "--config", str(cfg)])
     assert rc == 0
@@ -45,11 +44,10 @@ def test_fetch_known_version_writes_file(tmp_path: Path) -> None:
     assert len(files) == 1
 
 
-@respx.mock
-def test_fetch_all_known_iterates(tmp_path: Path) -> None:
+def test_fetch_all_known_iterates(tmp_path: Path, httpx2_mock: respx.Router) -> None:
     body = b'{"openapi": "3.0.0", "paths": {}, "info": {"title": "x", "version": "1"}}'
     for url in KNOWN_SPEC_URLS.values():
-        respx.get(url).mock(return_value=httpx.Response(200, content=body))
+        httpx2_mock.get(url).mock(return_value=httpx.Response(200, content=body))
     cfg = _minimal_config_yaml(tmp_path)
     rc = run_fetch(["--all-known", "--config", str(cfg)])
     assert rc == 0
@@ -73,19 +71,20 @@ def test_fetch_version_and_all_known_mutually_exclusive(
         run_fetch(["2.3.7.9", "--all-known", "--config", str(cfg)])
 
 
-@respx.mock
 def test_fetch_all_known_continues_after_failure(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, httpx2_mock: respx.Router, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """When one version fails mid-loop, --all-known still attempts the rest."""
     versions = list(KNOWN_SPEC_URLS)
     assert len(versions) >= 2, "test assumes 2+ known versions"
     body = b'{"openapi":"3.0.0","paths":{},"info":{"title":"x","version":"1"}}'
     # First succeeds, second fails, any others succeed.
-    respx.get(KNOWN_SPEC_URLS[versions[0]]).mock(return_value=httpx.Response(200, content=body))
-    respx.get(KNOWN_SPEC_URLS[versions[1]]).mock(return_value=httpx.Response(503))
+    httpx2_mock.get(KNOWN_SPEC_URLS[versions[0]]).mock(
+        return_value=httpx.Response(200, content=body)
+    )
+    httpx2_mock.get(KNOWN_SPEC_URLS[versions[1]]).mock(return_value=httpx.Response(503))
     for v in versions[2:]:
-        respx.get(KNOWN_SPEC_URLS[v]).mock(return_value=httpx.Response(200, content=body))
+        httpx2_mock.get(KNOWN_SPEC_URLS[v]).mock(return_value=httpx.Response(200, content=body))
     cfg = _minimal_config_yaml(tmp_path)
     rc = run_fetch(["--all-known", "--config", str(cfg)])
     assert rc == 1
@@ -96,8 +95,7 @@ def test_fetch_all_known_continues_after_failure(
     assert any((tmp_path / "specs" / versions[0]).glob("*.json"))
 
 
-@respx.mock
-def test_fetch_specs_dir_flag_overrides_config(tmp_path: Path) -> None:
+def test_fetch_specs_dir_flag_overrides_config(tmp_path: Path, httpx2_mock: respx.Router) -> None:
     """The --specs-dir flag wins over config.catalyst_center_mcp.specs_dir."""
     config_specs = tmp_path / "from_config"
     flag_specs = tmp_path / "from_flag"
@@ -107,7 +105,7 @@ def test_fetch_specs_dir_flag_overrides_config(tmp_path: Path) -> None:
     )
     v = "2.3.7.9"
     body = b'{"openapi":"3.0.0","paths":{},"info":{"title":"x","version":"1"}}'
-    respx.get(KNOWN_SPEC_URLS[v]).mock(return_value=httpx.Response(200, content=body))
+    httpx2_mock.get(KNOWN_SPEC_URLS[v]).mock(return_value=httpx.Response(200, content=body))
     rc = run_fetch([v, "--config", str(cfg), "--specs-dir", str(flag_specs)])
     assert rc == 0
     assert any((flag_specs / v).glob("*.json"))

@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import httpx
+import httpx2
 
 # Source URLs sourced from the v0.1.0 commit messages that bundled the
 # existing specs (commits 531e3eb and 6466dd4). Update by appending a new
@@ -81,13 +81,13 @@ async def fetch_spec(
     version: str,
     dest_dir: Path,
     *,
-    client: httpx.AsyncClient | None = None,
+    client: httpx2.AsyncClient | None = None,
 ) -> Path:
     """Download the Catalyst Center OpenAPI spec for `version` into `dest_dir`.
 
     Returns the path of the written JSON file. Raises SpecVersionUnknownError
     for unknown versions, SpecContentInvalidError if pubhub returned 200 but
-    not an OpenAPI document, or propagates httpx errors. No partial file is
+    not an OpenAPI document, or propagates httpx2 errors. No partial file is
     left behind on any failure.
 
     TLS verification is always on. See module docstring.
@@ -112,7 +112,7 @@ async def fetch_spec(
         # verify=True always — pubhub is a public CDN, MITM risk doesn't
         # depend on Catalyst Center's cert trust.
         # follow_redirects=True — pubhub may serve via CDN with 302s.
-        client = httpx.AsyncClient(verify=True, timeout=120.0, follow_redirects=True)
+        client = httpx2.AsyncClient(verify=True, timeout=120.0, follow_redirects=True)
 
     try:
         print(f"[fetcher] Downloading {url}", file=sys.stderr)

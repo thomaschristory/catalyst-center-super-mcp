@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-import httpx
+import httpx2
 
 from catalyst_center_mcp.cli._common import add_config_args, load_config_or_default
 from catalyst_center_mcp.fetcher import (
@@ -60,7 +60,7 @@ def run_fetch(argv: list[str]) -> int:
             except (
                 SpecVersionUnknownError,
                 SpecContentInvalidError,
-                httpx.HTTPError,
+                httpx2.HTTPError,
                 json.JSONDecodeError,
                 OSError,
             ) as exc:
