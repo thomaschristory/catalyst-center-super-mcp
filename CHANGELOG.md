@@ -5,6 +5,30 @@ All notable changes to catalyst-center-super-mcp will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Docs build migrated from MkDocs + Material for MkDocs to [Zensical](https://zensical.org/) (#45).**
+  Zensical is the successor to both, from the same team (squidfunk). It reads the existing
+  `mkdocs.yml` natively, so URLs, anchors, nav, and the Python-Markdown extension set are
+  unchanged — and the output directory is still `site/`, so the Pages upload path is
+  untouched. `mkdocs` + `mkdocs-material` are replaced by `zensical>=0.0.50` in the `docs`
+  dependency group, and the docs workflow now runs `zensical build --strict`, which
+  validates anchors as well as links. Compatibility was checked before switching: this repo
+  declares no `plugins:` at all and uses only stock `theme.features`, all of which are
+  supported — the module system that replaces third-party MkDocs plugins is not yet GA, but
+  we depend on none of them. `mkdocs.yml` is deliberately left unchanged (no `zensical.toml`),
+  which also keeps the rollback a pure dependency/CI revert.
+
+### Added
+- **Warm "paper" docs theme, shared with `panorama-super-cli` (#45).** A small `extra_css`
+  (`docs/stylesheets/extra.css`) softens the stock black-on-white / white-on-black extremes
+  into a lower-glare warm pair, touching only background/foreground surfaces — the `indigo`
+  primary/accent from `mkdocs.yml` still drives links and accents. It also sets
+  `--md-default-bg-color--light`, which is the variable Zensical's *modern* theme uses to
+  paint the top bar (classic Material used `primary`), so the header is a lifted tone
+  distinct from the page body rather than the stock near-white/near-black.
+
 ## [0.5.0] — 2026-06-17
 
 The request-body-fields fix, an off-by-default debug mode, security-audit hardening, and removal of the legacy `config.yaml` shim. See the [v0.5.0 milestone](https://github.com/thomaschristory/catalyst-center-super-mcp/milestone/8) for the full PR list.

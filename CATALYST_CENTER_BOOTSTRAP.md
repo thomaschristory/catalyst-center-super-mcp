@@ -20,7 +20,7 @@ These design decisions carry over with **no changes** — they are not vManage-s
 - **Dispatcher retry** on session expiry (re-auth + retry once) and transient HTTP failures.
 - **Transports:** stdio / sse / streamable-http via the same CLI flags.
 - **Docker:** volume-mounted specs, multi-stage `uv`-based build.
-- **Stack:** Python ≥ 3.11, fastmcp, httpx, pyyaml, pytest+respx, ruff, mkdocs-material.
+- **Stack:** Python ≥ 3.11, fastmcp, httpx, pyyaml, pytest+respx, ruff, zensical (docs).
 
 When in doubt, copy the file from `catalyst-sdwan-super-mcp/` and adjust only the swap-points below.
 

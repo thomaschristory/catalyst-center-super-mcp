@@ -31,6 +31,9 @@ theme:
     - content.code.copy
     - content.code.annotate
 
+extra_css:
+  - stylesheets/extra.css
+
 nav:
   - Home: index.md
   - Architecture:
