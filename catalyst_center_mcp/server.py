@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Literal, cast
 
-import httpx
+import httpx2
 from dotenv import find_dotenv, load_dotenv
 from fastmcp import FastMCP
 from starlette.middleware import Middleware
@@ -251,7 +251,7 @@ async def _maybe_auto_fetch(
     )
     try:
         await fetch_spec(version, version_dir)
-    except (SpecVersionUnknownError, SpecContentInvalidError, httpx.HTTPError) as exc:
+    except (SpecVersionUnknownError, SpecContentInvalidError, httpx2.HTTPError) as exc:
         raise RuntimeError(
             f"[startup] auto-fetch failed for version {version}: {exc}. "
             f"Set auto_fetch: false in catalyst-center-mcp.yaml and place the spec "

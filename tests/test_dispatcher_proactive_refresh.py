@@ -35,8 +35,7 @@ def _make_dispatcher(auth: CatalystCenterAuth) -> Dispatcher:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_proactive_refresh_fires_when_needs_refresh_true():
+async def test_proactive_refresh_fires_when_needs_refresh_true(httpx2_mock: respx.Router):
     auth = CatalystCenterAuth(
         host="example.com", port=443, username="u", password="p", verify_ssl=False
     )
@@ -44,10 +43,10 @@ async def test_proactive_refresh_fires_when_needs_refresh_true():
     auth._expires_at = time.time() + 30  # within margin → proactive refresh
 
     # Mock the login endpoint and the data endpoint.
-    login_route = respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+    login_route = httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
         return_value=httpx.Response(200, json={"Token": "fresh", "message": ""})
     )
-    data_route = respx.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
+    data_route = httpx2_mock.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(200, json={"response": 42, "version": "1.0"})
     )
 
@@ -69,18 +68,18 @@ async def test_proactive_refresh_fires_when_needs_refresh_true():
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_no_proactive_refresh_when_token_fresh():
+@pytest.mark.httpx2(assert_all_called=False)  # the login route must stay uncalled
+async def test_no_proactive_refresh_when_token_fresh(httpx2_mock: respx.Router):
     auth = CatalystCenterAuth(
         host="example.com", port=443, username="u", password="p", verify_ssl=False
     )
     auth._token = "fresh"  # type: ignore[attr-defined]
     auth._expires_at = time.time() + 3600  # far from expiry
 
-    login_route = respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+    login_route = httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
         return_value=httpx.Response(200, json={"Token": "newer", "message": ""})
     )
-    respx.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
+    httpx2_mock.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(200, json={"response": 1, "version": "1.0"})
     )
 
@@ -91,8 +90,7 @@ async def test_no_proactive_refresh_when_token_fresh():
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_reactive_401_still_works_when_not_proactively_refreshing():
+async def test_reactive_401_still_works_when_not_proactively_refreshing(httpx2_mock: respx.Router):
     """Regression: existing 401 → re-auth → retry path must keep working."""
     auth = CatalystCenterAuth(
         host="example.com", port=443, username="u", password="p", verify_ssl=False
@@ -100,11 +98,11 @@ async def test_reactive_401_still_works_when_not_proactively_refreshing():
     auth._token = "fresh"  # type: ignore[attr-defined]
     auth._expires_at = time.time() + 3600  # no proactive refresh
 
-    login_route = respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+    login_route = httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
         return_value=httpx.Response(200, json={"Token": "rotated", "message": ""})
     )
     # First GET 401, second GET 200.
-    data_route = respx.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
+    data_route = httpx2_mock.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
         side_effect=[
             httpx.Response(401, json={"message": "Bad token"}),
             httpx.Response(200, json={"response": 7, "version": "1.0"}),
@@ -124,8 +122,7 @@ async def test_reactive_401_still_works_when_not_proactively_refreshing():
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_concurrent_calls_serialise_refresh():
+async def test_concurrent_calls_serialise_refresh(httpx2_mock: respx.Router):
     """Three concurrent calls with stale token → only ONE re-login, not three."""
     auth = CatalystCenterAuth(
         host="example.com", port=443, username="u", password="p", verify_ssl=False
@@ -141,10 +138,10 @@ async def test_concurrent_calls_serialise_refresh():
         await asyncio.sleep(0.1)  # simulate a slow auth round-trip
         return httpx.Response(200, json={"Token": "fresh", "message": ""})
 
-    login_route = respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+    login_route = httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
         side_effect=slow_login
     )
-    data_route = respx.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
+    data_route = httpx2_mock.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(200, json={"response": 42, "version": "1.0"})
     )
 
@@ -169,8 +166,7 @@ async def test_concurrent_calls_serialise_refresh():
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_two_concurrent_401s_only_relogin_once():
+async def test_two_concurrent_401s_only_relogin_once(httpx2_mock: respx.Router):
     """Two concurrent calls both hit 401 → snapshot pattern means only one re-login.
 
     Without the `if self._auth._token == stale_token` check, both tasks would
@@ -189,7 +185,7 @@ async def test_two_concurrent_401s_only_relogin_once():
         await asyncio.sleep(0.05)
         return httpx.Response(200, json={"Token": "rotated", "message": ""})
 
-    login_route = respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+    login_route = httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
         side_effect=slow_login
     )
 
@@ -200,7 +196,7 @@ async def test_two_concurrent_401s_only_relogin_once():
             return httpx.Response(401, json={"message": "Bad token"})
         return httpx.Response(200, json={"response": 99, "version": "1.0"})
 
-    data_route = respx.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
+    data_route = httpx2_mock.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
         side_effect=get_handler
     )
 
@@ -224,8 +220,7 @@ async def test_two_concurrent_401s_only_relogin_once():
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_persistent_401_returns_error_envelope():
+async def test_persistent_401_returns_error_envelope(httpx2_mock: respx.Router):
     """If 401 persists after re-auth, surface an error envelope — not `_token_expired`."""
     auth = CatalystCenterAuth(
         host="example.com", port=443, username="u", password="p", verify_ssl=False
@@ -233,11 +228,11 @@ async def test_persistent_401_returns_error_envelope():
     auth._token = "fresh"  # type: ignore[attr-defined]
     auth._expires_at = time.time() + 3600
 
-    respx.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
+    httpx2_mock.post("https://example.com:443/dna/system/api/v1/auth/token").mock(
         return_value=httpx.Response(200, json={"Token": "still-bad", "message": ""})
     )
     # Every GET returns 401, even after re-auth.
-    respx.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
+    httpx2_mock.get("https://example.com/dna/intent/api/v1/network-device/count").mock(
         return_value=httpx.Response(401, json={"message": "Bad token"})
     )
 

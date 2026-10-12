@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **HTTP client migrated from `httpx` to [`httpx2`](https://github.com/pydantic/httpx2) (#47).**
+  `httpx2` is Pydantic's maintained fork of `httpx`, forked from `httpx` 0.28.1 in response to
+  upstream's slowing release cadence. The rename is the only breaking change — `import httpx`
+  becomes `import httpx2` and no other public API differs — so all seven source modules are a
+  mechanical swap, with `AsyncClient`, `Response`, and the exception tree behaving as before.
+  Note that **`httpx` remains installed**: `mcp` (via `fastmcp`) and `respx` both depend on it.
+  This change moves *our* code onto the maintained fork; it does not remove `httpx` from the
+  dependency tree, and cannot until those upstreams move.
+  On the test side, `respx` is built on legacy `httpx` and cannot intercept an `httpx2` client,
+  so the suite now goes through [`pytest-httpx2`](https://github.com/lundberg/pytest-httpx2)
+  (by respx's own author), which patches `httpcore2` and supplies an `httpx2_mock: respx.Router`
+  fixture. Mocked responses stay legacy `httpx.Response` objects (respx type-asserts on them)
+  while `side_effect` exceptions must be `httpx2.*` (respx re-raises them verbatim, and only
+  *httpcore2* errors get re-mapped into the httpx2 family). That asymmetry is documented in
+  CLAUDE.md. Test coverage is unchanged — every assertion was ported as-is.
 - **Docs build migrated from MkDocs + Material for MkDocs to [Zensical](https://zensical.org/) (#45).**
   Zensical is the successor to both, from the same team (squidfunk). It reads the existing
   `mkdocs.yml` natively, so URLs, anchors, nav, and the Python-Markdown extension set are

@@ -23,9 +23,9 @@ This repo was scaffolded on **2026-05-25** per [`docs/superpowers/specs/2026-05-
 - **Python** ≥ 3.11 (CI: 3.11, 3.12, 3.13 on Linux + macOS)
 - **Packaging:** `pyproject.toml` (hatchling), managed with `uv`
 - **MCP framework:** `fastmcp`
-- **HTTP client:** `httpx` (async)
+- **HTTP client:** `httpx2` (async) — Pydantic's maintained fork of `httpx`; see [HTTP client](#http-client-httpx2)
 - **Config parsing:** `pyyaml` + `python-dotenv`
-- **Tests:** `pytest`, `respx` (HTTP mocks), `pytest-asyncio`
+- **Tests:** `pytest`, `respx` + `pytest-httpx2` (HTTP mocks), `pytest-asyncio`
 - **Lint / format:** `ruff`
 - **Docs:** `zensical` (reads the existing `mkdocs.yml`), deployed to GitHub Pages
 
@@ -113,6 +113,47 @@ Subsequent requests:
 Token refresh is **reactive only**: on a 401 the dispatcher re-runs the login flow and retries the original request once. The JWT carries an `exp` claim (TTL exactly 3600s on the sandbox), but v0.1.0 ignores it — a proactive refresh path can be added later without changing the public surface.
 
 No cookie jar, no dual-mode — a single flow applies to all supported versions.
+
+---
+
+## HTTP client (httpx2)
+
+All HTTP goes through **`httpx2`** — Pydantic's maintained fork of `httpx`, forked from
+`httpx` 0.28.1. `import httpx` becomes `import httpx2`; **no other public API differs**, so
+`AsyncClient`, `Response`, and the exception tree behave exactly as before.
+
+**`httpx` is still installed** — `mcp` (via `fastmcp`) and `respx` both depend on it. That is
+expected and unavoidable. The rule is simply: **nothing under `catalyst_center_mcp/` may
+import `httpx`.** Only `httpx2`.
+
+### Writing tests against httpx2
+
+`respx` is built on legacy `httpx` and cannot see an `httpx2` client. The bridge is
+**`pytest-httpx2`**, which patches `httpcore2` and hands you an `httpx2_mock: respx.Router`
+fixture. Three rules, and they are not symmetric — get them wrong and tests pass while
+asserting nothing:
+
+1. **Take the fixture.** A bare `@respx.mock` decorator (or module-level `respx.get(...)`)
+   drives respx's default router, which patches `httpcore` v1 and will **not** intercept
+   httpx2. Always take `httpx2_mock: respx.Router` and call `httpx2_mock.get(...)`.
+2. **Responses stay `httpx.Response`.** respx asserts `isinstance(response, httpx.Response)`
+   internally; an `httpx2.Response` raises `TypeError`. Same for `side_effect` handlers —
+   they receive an `httpx.Request` and must return an `httpx.Response`.
+3. **Exceptions become `httpx2.*`.** respx re-raises `side_effect` exceptions verbatim, and
+   httpx2 only re-maps *httpcore2* errors. A mocked `httpx.ConnectError` would sail straight
+   past our production `except httpx2.RequestError` handlers.
+
+```python
+def test_retry(httpx2_mock: respx.Router) -> None:
+    httpx2_mock.get(url).mock(side_effect=[
+        httpx2.ConnectError("blip"),        # exceptions -> httpx2
+        httpx.Response(200, json={"r": 1}), # responses  -> httpx
+    ])
+```
+
+For `assert_all_called` / `base_url`, use `@pytest.mark.httpx2(...)` (registered in
+`pyproject.toml`, since `--strict-markers` is on and the plugin does not export its own
+registration hook).
 
 ---
 
@@ -406,6 +447,7 @@ A clean diff from a sketchy profile is still mergeable — but **never auto-merg
 |---|---|---|
 | Language | Python ≥ 3.11 | Simpler local iteration, no build step |
 | MCP framework | fastmcp | Minimal boilerplate |
+| HTTP client | `httpx2` (Pydantic's fork of `httpx` 0.28.1), not `httpx` | Upstream `httpx` has slowed; the fork is maintained and gets timely security fixes. Identical public API, so the swap is mechanical. `httpx` stays installed transitively via `mcp` + `respx` — we cannot drop it, only stop importing it. |
 | Packaging | hatchling + uv | Modern Python packaging, fast dependency resolution |
 | Tool splitting | Size-driven adaptive splitter (`max_actions_per_tool`, default 80). Section → sub-tag → URL path (depth 3–5). | The earlier `section`/`tag` toggle was too coarse. A single size cap with recursive fallback adapts cleanly to the spec's actual shape without a mode switch. |
 | Action names | Derived from `(method, path, tag)`, not Cisco's `operationId`. | Cisco renames operationIds between releases. Our user-facing action name stays stable across those renames. operationId remains on `OperationSpec` as a back-reference for `--diff`. |

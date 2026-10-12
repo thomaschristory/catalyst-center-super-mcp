@@ -20,7 +20,7 @@ These design decisions carry over with **no changes** — they are not vManage-s
 - **Dispatcher retry** on session expiry (re-auth + retry once) and transient HTTP failures.
 - **Transports:** stdio / sse / streamable-http via the same CLI flags.
 - **Docker:** volume-mounted specs, multi-stage `uv`-based build.
-- **Stack:** Python ≥ 3.11, fastmcp, httpx, pyyaml, pytest+respx, ruff, zensical (docs).
+- **Stack:** Python ≥ 3.11, fastmcp, httpx2, pyyaml, pytest+respx+pytest-httpx2, ruff, zensical (docs).
 
 When in doubt, copy the file from `catalyst-sdwan-super-mcp/` and adjust only the swap-points below.
 
@@ -38,7 +38,7 @@ When in doubt, copy the file from `catalyst-sdwan-super-mcp/` and adjust only th
 | Auth endpoint | `POST /j_security_check` (JWT or session) | `POST /dna/system/api/v1/auth/token` (Basic Auth → returns JWT) |
 | Auth header | `Authorization: Bearer {token}` + `X-XSRF-TOKEN` | `X-Auth-Token: {token}` |
 | Token lifetime | ~30 min, refresh proactively | 1 hour by default; refresh on 401 |
-| Cookie handling | httpx jar manages `JSESSIONID` | none — pure header auth |
+| Cookie handling | httpx2 jar manages `JSESSIONID` | none — pure header auth |
 | Spec source | DevNet vmanageapi YAML, one file per version | DevNet Catalyst Center API spec (check format — likely OpenAPI 3.0 JSON) |
 | Bundled versions | 20.15, 20.16, 20.18 | TBD — start with the latest published (2.3.7.x family) |
 | Default version | 20.18 | TBD |

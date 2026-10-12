@@ -20,7 +20,7 @@ import json
 import sys
 import time
 
-import httpx
+import httpx2
 
 
 def _decode_jwt_payload(token: str) -> dict[str, object] | None:
@@ -84,7 +84,7 @@ class CatalystCenterAuth:
         self._token: str = ""
         self._expires_at: float | None = None
 
-    async def login(self, client: httpx.AsyncClient) -> None:
+    async def login(self, client: httpx2.AsyncClient) -> None:
         """POST /dna/system/api/v1/auth/token with HTTP Basic, store the JWT."""
         if not self._username or not self._password:
             raise AuthError(
@@ -97,7 +97,7 @@ class CatalystCenterAuth:
                 f"{self._base_url}{_TOKEN_PATH}",
                 auth=(self._username, self._password),
             )
-        except httpx.RequestError as exc:
+        except httpx2.RequestError as exc:
             raise AuthError(f"Cannot reach Catalyst Center at {self._base_url}: {exc}") from exc
 
         if response.status_code != 200:

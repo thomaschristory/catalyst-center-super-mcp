@@ -34,7 +34,7 @@ import re
 import sys
 from typing import Final
 
-import httpx
+import httpx2
 
 DEVNET_INDEX_URL: Final[str] = "https://developer.cisco.com/docs/catalyst-center/"
 
@@ -101,10 +101,10 @@ def discover_versions() -> dict[str, str]:
     """Fetch DevNet's docs index page and return ``{version: pubhub_url}``.
 
     Does NOT mutate ``KNOWN_SPEC_URLS``. Always verifies TLS — the helper owns
-    its httpx.Client and never accepts a caller-supplied one (preventing
+    its httpx2.Client and never accepts a caller-supplied one (preventing
     accidental ``verify=False`` misuse).
     """
-    with httpx.Client(verify=True, timeout=30.0, follow_redirects=True) as client:
+    with httpx2.Client(verify=True, timeout=30.0, follow_redirects=True) as client:
         response = client.get(DEVNET_INDEX_URL)
         response.raise_for_status()
         if str(response.url).rstrip("/") != DEVNET_INDEX_URL.rstrip("/"):

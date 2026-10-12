@@ -141,7 +141,7 @@ Exit codes:
 |---|---|
 | `0` | Every hardcoded entry was also discovered on DevNet. `+ <version>` lines may appear for new entries DevNet exposes that aren't yet in `KNOWN_SPEC_URLS` — these do not change the exit code. |
 | `1` | One or more hardcoded entries are no longer visible on DevNet (`- <version>` lines). The hardcoded table may be stale. |
-| `2` | `DiscoveryError` (regex matched zero URLs on the page — DevNet's HTML shape may have changed) or `httpx.HTTPError` (network down, non-2xx). |
+| `2` | `DiscoveryError` (regex matched zero URLs on the page — DevNet's HTML shape may have changed) or `httpx2.HTTPError` (network down, non-2xx). |
 
 **Why `[experimental]`:** DevNet's docs page is largely a JavaScript SPA;
 its static HTML may not contain the full pubhub spec URLs the regex
