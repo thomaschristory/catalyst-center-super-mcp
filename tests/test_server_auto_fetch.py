@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from catalyst_center_mcp.fetcher import (
@@ -134,7 +134,7 @@ async def test_network_error_wrapped_at_startup(tmp_path: Path):
     """F6: httpx errors also wrapped."""
     from catalyst_center_mcp import server
 
-    boom = httpx.ConnectError("connection refused")
+    boom = httpx2.ConnectError("connection refused")
     with (
         patch.object(server, "fetch_spec", new=AsyncMock(side_effect=boom)),
         pytest.raises(RuntimeError) as exc_info,
